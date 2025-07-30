@@ -1,17 +1,27 @@
 ﻿using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
-using Avalonia.Threading;
-using LibVLCSharp.Shared;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Threading;
+using LibVLCSharp.Shared;
+using Material.Icons;
+using Material.Icons.Avalonia;
 using TagLib;
+using Avalonia.Input; // Required for TappedEventArgs
+using Avalonia.Media; // Required for Brushes
 
 namespace AuroraMusic
 {
+    public enum RepeatMode
+    {
+        None,
+        RepeatPlaylist,
+        RepeatTrack
+    }
+
     public class PlaylistItem
     {
         public string Title { get; set; } = "Unknown Title";
@@ -23,53 +33,76 @@ namespace AuroraMusic
 
     public partial class MainWindow : Window
     {
-        // LibVLCSharp objects
         private LibVLC _libVLC;
-
         private MediaPlayer _mediaPlayer;
-
-        // A list to hold our playlist items
         private List<PlaylistItem> _playlist = new List<PlaylistItem>();
-
         private bool _isUserDraggingSlider = false;
+        private RepeatMode _currentRepeatMode = RepeatMode.None;
+
+        private readonly Control _mainContentView;
+        private readonly SettingsView _settingsView;
 
         public MainWindow()
         {
             InitializeComponent();
+            this.ExtendClientAreaToDecorationsHint = true;
+            this.ExtendClientAreaTitleBarHeightHint = -1;
 
-            // Best to load native libraries in the constructor.
-            // This will throw an exception if VLC is not installed.
+            _mainContentView = (Control)MainContentArea.Content;
+            _settingsView = new SettingsView();
+            _settingsView.FolderSelected += OnFolderSelectedInSettings;
+            _settingsView.GoBackRequested += ShowMainContent;
+
             try
             {
                 Core.Initialize();
             }
             catch (Exception ex)
             {
-                // Inform the user that VLC is required.
-                NowPlayingText.Text = $"Error: VLC runtime not found. Please install VLC media player. Details: {ex.Message}";
-                OpenFolderButton.IsEnabled = false;
+                NowPlayingInfoText.Text = $"Error: VLC runtime not found. Please install VLC.";
+                SettingsButton.IsEnabled = false;
                 return;
             }
 
             _libVLC = new LibVLC();
             _mediaPlayer = new MediaPlayer(_libVLC);
 
-            // Set up event handlers for the media player
             _mediaPlayer.TimeChanged += OnTimeChanged;
             _mediaPlayer.LengthChanged += OnLengthChanged;
             _mediaPlayer.EndReached += OnEndReached;
 
-            // Set up event handlers for UI controls
             VolumeSlider.ValueChanged += OnVolumeChanged;
             PositionSlider.PointerPressed += (s, e) => _isUserDraggingSlider = true;
             PositionSlider.PointerReleased += OnPositionSliderReleased;
         }
 
-        // --- Event Handlers for Media Player ---
+        private void SettingsButton_Click(object? sender, RoutedEventArgs e)
+        {
+            MainContentArea.Content = _settingsView;
+        }
+
+        private void ShowMainContent()
+        {
+            MainContentArea.Content = _mainContentView;
+        }
+
+        private void OnFolderSelectedInSettings(string folderPath)
+        {
+            _ = LoadFilesFromFolder(folderPath);
+            ShowMainContent();
+        }
+
+        private void Playlist_DoubleTapped(object? sender, TappedEventArgs e)
+        {
+            if (Playlist.SelectedItem is PlaylistItem selectedItem)
+            {
+                PlayFile(selectedItem.FilePath);
+                UpdateNowPlaying(selectedItem);
+            }
+        }
 
         private void OnTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
         {
-            // We need to dispatch UI updates to the UI thread
             Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (!_isUserDraggingSlider)
@@ -91,36 +124,55 @@ namespace AuroraMusic
 
         private void OnEndReached(object? sender, EventArgs e)
         {
-            // When a song finishes, play the next one
-            Dispatcher.UIThread.InvokeAsync(PlayNext);
-        }
-
-        // --- Event Handlers for UI Controls ---
-
-        private async void OpenFolderButton_Click(object sender, RoutedEventArgs e)
-        {
-            var topLevel = GetTopLevel(this);
-            if (topLevel == null) return;
-
-            // Use Avalonia's storage provider to open a folder picker
-            var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            Dispatcher.UIThread.InvokeAsync(() =>
             {
-                Title = "Select Music Folder",
-                AllowMultiple = false
+                switch (_currentRepeatMode)
+                {
+                    case RepeatMode.RepeatTrack:
+                        _mediaPlayer.Play(); // Replay the current track
+                        break;
+
+                    case RepeatMode.RepeatPlaylist:
+                        PlayNext(); // Play the next track, wrapping around
+                        break;
+
+                    case RepeatMode.None:
+                        // If it's the last song, stop. Otherwise, play the next one.
+                        if (Playlist.SelectedIndex < _playlist.Count - 1)
+                        {
+                            PlayNext();
+                        }
+                        else
+                        {
+                            _mediaPlayer.Stop();
+                            PlayPauseIcon.Kind = MaterialIconKind.Play;
+                            NowPlayingInfoText.Text = "Playlist finished";
+                        }
+                        break;
+                }
             });
-
-            if (folders.Count > 0)
-            {
-                await LoadFilesFromFolder(folders[0].Path.LocalPath);
-            }
         }
 
-        private void Playlist_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        private void RepeatButton_Click(object? sender, RoutedEventArgs e)
         {
-            if (Playlist.SelectedItem is PlaylistItem selectedItem)
+            _currentRepeatMode = (RepeatMode)(((int)_currentRepeatMode + 1) % 3);
+
+            switch (_currentRepeatMode)
             {
-                PlayFile(selectedItem.FilePath);
-                UpdateNowPlaying(selectedItem);
+                case RepeatMode.None:
+                    RepeatIcon.Kind = MaterialIconKind.Repeat;
+                    RepeatIcon.Foreground = Brushes.White;
+                    break;
+
+                case RepeatMode.RepeatPlaylist:
+                    RepeatIcon.Kind = MaterialIconKind.Repeat;
+                    RepeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255)); // DeepSkyBlue
+                    break;
+
+                case RepeatMode.RepeatTrack:
+                    RepeatIcon.Kind = MaterialIconKind.RepeatOnce;
+                    RepeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255)); // DeepSkyBlue
+                    break;
             }
         }
 
@@ -129,28 +181,43 @@ namespace AuroraMusic
             if (_mediaPlayer.IsPlaying)
             {
                 _mediaPlayer.Pause();
-                PlayPauseButton.Content = "▶️";
+                PlayPauseIcon.Kind = MaterialIconKind.Play;
             }
             else
             {
-                // If we are at the beginning of the playlist and nothing is loaded
                 if (_mediaPlayer.Media == null && Playlist.Items.Count > 0)
                 {
-                    Playlist.SelectedIndex = 0; // This will trigger playback
+                    if (Playlist.SelectedItem != null)
+                    {
+                        if (Playlist.SelectedItem is PlaylistItem selectedItem)
+                        {
+                            PlayFile(selectedItem.FilePath);
+                            UpdateNowPlaying(selectedItem);
+                        }
+                    }
+                    else
+                    {
+                        Playlist.SelectedIndex = 0;
+                        if (Playlist.SelectedItem is PlaylistItem selectedItem)
+                        {
+                            PlayFile(selectedItem.FilePath);
+                            UpdateNowPlaying(selectedItem);
+                        }
+                    }
                 }
                 else
                 {
                     _mediaPlayer.Play();
                 }
-                PlayPauseButton.Content = "⏸";
+                PlayPauseIcon.Kind = MaterialIconKind.Pause;
             }
         }
 
         private void StopButton_Click(object sender, RoutedEventArgs e)
         {
             _mediaPlayer.Stop();
-            PlayPauseButton.Content = "▶️";
-            NowPlayingText.Text = "Stopped";
+            PlayPauseIcon.Kind = MaterialIconKind.Play;
+            NowPlayingInfoText.Text = "Stopped";
             PositionSlider.Value = 0;
             TimeLabel.Text = "00:00";
         }
@@ -169,7 +236,6 @@ namespace AuroraMusic
         {
             if (_mediaPlayer != null)
             {
-                // Volume is a percentage from 0 to 100
                 _mediaPlayer.Volume = (int)e.NewValue;
             }
         }
@@ -183,13 +249,11 @@ namespace AuroraMusic
             _isUserDraggingSlider = false;
         }
 
-        // --- Helper Methods ---
-
         private async Task LoadFilesFromFolder(string folderPath)
         {
             _playlist.Clear();
             Playlist.Items.Clear();
-            NowPlayingText.Text = "Loading...";
+            NowPlayingInfoText.Text = "Loading...";
 
             var supportedExtensions = new[] { ".mp3", ".flac", ".m4a", ".mp4" };
             var files = Directory.EnumerateFiles(folderPath, "*.*", SearchOption.AllDirectories)
@@ -201,7 +265,6 @@ namespace AuroraMusic
                 {
                     try
                     {
-                        // Use TagLib# to read metadata from the file
                         using (var tagFile = TagLib.File.Create(file))
                         {
                             _playlist.Add(new PlaylistItem
@@ -214,24 +277,21 @@ namespace AuroraMusic
                     }
                     catch (CorruptFileException)
                     {
-                        // Handle cases where metadata can't be read
                         _playlist.Add(new PlaylistItem { Title = Path.GetFileName(file), FilePath = file });
                     }
                     catch (Exception)
                     {
-                        // Ignore other potential errors with reading files
                     }
                 }
             });
 
-            // Update the UI on the main thread
             Playlist.Items.Clear();
             foreach (var item in _playlist)
             {
                 Playlist.Items.Add(item);
             }
 
-            NowPlayingText.Text = $"Loaded {_playlist.Count} tracks. Select a song to play.";
+            NowPlayingInfoText.Text = "Select a song to play";
         }
 
         private void PlayFile(string filePath)
@@ -245,32 +305,40 @@ namespace AuroraMusic
             _mediaPlayer.Media = media;
             _mediaPlayer.Play();
 
-            media.Dispose(); // Dispose of the media object after it's been assigned
+            media.Dispose();
 
-            PlayPauseButton.Content = "⏸";
+            PlayPauseIcon.Kind = MaterialIconKind.Pause;
         }
 
         private void UpdateNowPlaying(PlaylistItem item)
         {
-            NowPlayingText.Text = $"Now Playing: {item.Artist} - {item.Title}";
+            NowPlayingInfoText.Text = $"{item.Artist} - {item.Title}";
         }
 
         private void PlayNext()
         {
             if (_playlist.Count == 0) return;
-
             int currentIndex = Playlist.SelectedIndex;
             int nextIndex = (currentIndex + 1) % _playlist.Count;
             Playlist.SelectedIndex = nextIndex;
+            if (Playlist.SelectedItem is PlaylistItem selectedItem)
+            {
+                PlayFile(selectedItem.FilePath);
+                UpdateNowPlaying(selectedItem);
+            }
         }
 
         private void PlayPrevious()
         {
             if (_playlist.Count == 0) return;
-
             int currentIndex = Playlist.SelectedIndex;
             int prevIndex = (currentIndex - 1 + _playlist.Count) % _playlist.Count;
             Playlist.SelectedIndex = prevIndex;
+            if (Playlist.SelectedItem is PlaylistItem selectedItem)
+            {
+                PlayFile(selectedItem.FilePath);
+                UpdateNowPlaying(selectedItem);
+            }
         }
     }
 }

@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:materialIcons="using:Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="AuroraMusic.SettingsView">
+	<Border Background="#44000000" Padding="20">
+		<StackPanel Spacing="15">
+			<TextBlock Text="Settings" FontSize="24" FontWeight="Bold" Foreground="White" />
+
+			<TextBlock Text="Music Library" FontSize="18" Foreground="LightGray" Margin="0,10,0,0" />
+			<TextBlock Text="Select the folder where your music files are stored." Foreground="Gray" />
+
+			<Button Name="SelectFolderButton" Click="SelectFolderButton_Click"
+                    Background="#99333333" Foreground="White" BorderThickness="1" BorderBrush="#AAFFFFFF" CornerRadius="5"
+                    Padding="8,5" HorizontalAlignment="Left">
+				<StackPanel Orientation="Horizontal" Spacing="8">
+					<materialIcons:MaterialIcon Kind="FolderMusic" VerticalAlignment="Center" Width="20" Height="20" />
+					<TextBlock Text="Select Music Folder" VerticalAlignment="Center" />
+				</StackPanel>
+			</Button>
+
+			<TextBlock Name="SelectedFolderText" Foreground="White" TextWrapping="Wrap" />
+
+			<Button Name="BackButton" Click="BackButton_Click"
+                    Content="Back to Player"
+                    Background="#99333333" Foreground="White" BorderThickness="1" BorderBrush="#AAFFFFFF" CornerRadius="5"
+                    Padding="8,5" HorizontalAlignment="Left" Margin="0,30,0,0" />
+		</StackPanel>
+	</Border>
+</UserControl>

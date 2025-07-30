@@ -27,6 +27,7 @@
 	  <!-- Add these packages for media playback and metadata -->
 	  <PackageReference Include="LibVLCSharp" Version="3.8.2" />
 	  <PackageReference Include="LibVLCSharp.Avalonia" Version="3.8.2" />
+	  <PackageReference Include="Material.Icons.Avalonia" Version="2.4.1" />
 	  <PackageReference Include="TagLibSharp" Version="2.3.0" />
 
 	  <!-- This is important! It ensures the native VLC libraries are copied to your output directory -->
