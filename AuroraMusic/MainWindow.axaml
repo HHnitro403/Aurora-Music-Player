@@ -3,6 +3,9 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="using:AuroraMusic"
+        xmlns:models="using:AuroraMusic.Models"
+        xmlns:views="using:AuroraMusic.Views"
+        xmlns:modals="using:AuroraMusic.Views.Modals"
         xmlns:materialIcons="using:Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
         x:Class="AuroraMusic.MainWindow"
@@ -14,81 +17,89 @@
         TransparencyLevelHint="AcrylicBlur"
         Background="Transparent">
 
-	<Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="250,*">
+	<!-- Main container allows for overlaying the popup -->
+	<Grid>
+		<Grid Name="MainGrid" RowDefinitions="Auto,*,Auto" ColumnDefinitions="250,*">
 
-		<!-- Header -->
-		<Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Padding="10"
-                Background="#88111111" Margin="0,30,0,0">
-			<Grid>
-				<Button Name="SettingsButton" Click="SettingsButton_Click"
-                        Background="Transparent" BorderThickness="0" VerticalAlignment="Center"
-                        HorizontalAlignment="Right">
-					<materialIcons:MaterialIcon Kind="Cog" Width="24" Height="24" />
-				</Button>
-			</Grid>
-		</Border>
-
-		<!-- Playlist -->
-		<ListBox Name="Playlist" Grid.Row="1" Grid.Column="0"
-                 Background="#661C1C1C" Foreground="White" BorderThickness="0"
-                 DoubleTapped="Playlist_DoubleTapped">
-			<ListBox.ItemTemplate>
-				<DataTemplate x:DataType="local:PlaylistItem">
-					<StackPanel Margin="5">
-						<TextBlock Text="{Binding Title}" FontWeight="Bold" />
-						<TextBlock Text="{Binding Artist}" FontSize="12" Foreground="LightGray" />
-					</StackPanel>
-				</DataTemplate>
-			</ListBox.ItemTemplate>
-		</ListBox>
-
-		<!-- Main Content Area -->
-		<ContentControl Name="MainContentArea" Grid.Row="1" Grid.Column="1">
-			<Border Background="#44000000">
-				<TextBlock Text="Modern Music Player" HorizontalAlignment="Center" VerticalAlignment="Center"
-                           FontSize="24" Foreground="#99FFFFFF" />
-			</Border>
-		</ContentControl>
-
-		<!-- Playback Controls -->
-		<Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Padding="15" Background="#88111111">
-			<Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*,Auto">
-				<TextBlock Name="TimeLabel" Grid.Row="0" Grid.Column="0" Text="00:00" VerticalAlignment="Center" Foreground="White" Margin="0,0,10,0" />
-				<Slider Name="PositionSlider" Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="100" Value="0" VerticalAlignment="Center" />
-				<TextBlock Name="DurationLabel" Grid.Row="0" Grid.Column="2" Text="00:00" VerticalAlignment="Center" Foreground="White" Margin="10,0,0,0" />
-
-				<Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" ColumnDefinitions="*,Auto,*" Margin="0,10,0,0">
-					<!-- Now Playing Info -->
-					<StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="10,0,0,0">
-						<TextBlock Name="NowPlayingInfoText" Text="-" Foreground="White" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-					</StackPanel>
-
-					<!-- Main Controls -->
-					<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="15">
-						<Button Name="PreviousButton" Click="PreviousButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
-							<materialIcons:MaterialIcon Kind="SkipPrevious" Width="24" Height="24" />
-						</Button>
-						<Button Name="PlayPauseButton" Click="PlayPauseButton_Click" Width="60" Height="60" CornerRadius="30" Background="#BB444444" BorderBrush="#CCFFFFFF" BorderThickness="1">
-							<materialIcons:MaterialIcon Name="PlayPauseIcon" Kind="Play" Width="30" Height="30" />
-						</Button>
-						<Button Name="StopButton" Click="StopButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
-							<materialIcons:MaterialIcon Kind="Stop" Width="24" Height="24" />
-						</Button>
-						<Button Name="NextButton" Click="NextButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
-							<materialIcons:MaterialIcon Kind="SkipNext" Width="24" Height="24" />
-						</Button>
-					</StackPanel>
-
-					<!-- Volume and Repeat Controls -->
-					<StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="15" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0">
-						<Button Name="RepeatButton" Click="RepeatButton_Click" Background="Transparent" BorderThickness="0">
-							<materialIcons:MaterialIcon Name="RepeatIcon" Kind="Repeat" Width="24" Height="24" Foreground="White" />
-						</Button>
-						<materialIcons:MaterialIcon Kind="VolumeHigh" Width="24" Height="24" VerticalAlignment="Center" />
-						<Slider Name="VolumeSlider" Width="120" Minimum="0" Maximum="100" Value="100" VerticalAlignment="Center" />
-					</StackPanel>
+			<!-- Header -->
+			<Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Padding="10"
+                    Background="#88111111" Margin="0,30,0,0">
+				<Grid>
+					<Button Name="SettingsButton" Click="SettingsButton_Click"
+                            Background="Transparent" BorderThickness="0" VerticalAlignment="Center"
+                            HorizontalAlignment="Right">
+						<materialIcons:MaterialIcon Kind="Cog" Width="24" Height="24" />
+					</Button>
 				</Grid>
-			</Grid>
-		</Border>
+			</Border>
+
+			<!-- Playlist -->
+			<ListBox Name="Playlist" Grid.Row="1" Grid.Column="0"
+                     Background="#661C1C1C" Foreground="White" BorderThickness="0"
+                     DoubleTapped="Playlist_DoubleTapped">
+				<ListBox.ItemTemplate>
+					<DataTemplate x:DataType="models:PlaylistItem">
+						<StackPanel Margin="5">
+							<TextBlock Text="{Binding Title}" FontWeight="Bold" />
+							<TextBlock Text="{Binding Artist}" FontSize="12" Foreground="LightGray" />
+						</StackPanel>
+					</DataTemplate>
+				</ListBox.ItemTemplate>
+			</ListBox>
+
+			<!-- Main Content Area -->
+			<ContentControl Name="MainContentArea" Grid.Row="1" Grid.Column="1">
+				<Border Background="#44000000">
+					<TextBlock Text="Modern Music Player" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               FontSize="24" Foreground="#99FFFFFF" />
+				</Border>
+			</ContentControl>
+
+			<!-- Playback Controls -->
+			<Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Padding="15" Background="#88111111">
+				<Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*,Auto">
+					<TextBlock Name="TimeLabel" Grid.Row="0" Grid.Column="0" Text="00:00" VerticalAlignment="Center" Foreground="White" Margin="0,0,10,0" />
+					<Slider Name="PositionSlider" Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="100" Value="0" VerticalAlignment="Center" />
+					<TextBlock Name="DurationLabel" Grid.Row="0" Grid.Column="2" Text="00:00" VerticalAlignment="Center" Foreground="White" Margin="10,0,0,0" />
+
+					<Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" ColumnDefinitions="*,Auto,*" Margin="0,10,0,0">
+						<!-- Now Playing Info -->
+						<StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="10,0,0,0">
+							<TextBlock Name="NowPlayingInfoText" Text="-" Foreground="White" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+						</StackPanel>
+
+						<!-- Main Controls -->
+						<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="15">
+							<Button Name="PreviousButton" Click="PreviousButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
+								<materialIcons:MaterialIcon Kind="SkipPrevious" Width="24" Height="24" />
+							</Button>
+							<Button Name="PlayPauseButton" Click="PlayPauseButton_Click" Width="60" Height="60" CornerRadius="30" Background="#BB444444" BorderBrush="#CCFFFFFF" BorderThickness="1">
+								<materialIcons:MaterialIcon Name="PlayPauseIcon" Kind="Play" Width="30" Height="30" />
+							</Button>
+							<Button Name="StopButton" Click="StopButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
+								<materialIcons:MaterialIcon Kind="Stop" Width="24" Height="24" />
+							</Button>
+							<Button Name="NextButton" Click="NextButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
+								<materialIcons:MaterialIcon Kind="SkipNext" Width="24" Height="24" />
+							</Button>
+						</StackPanel>
+
+						<!-- Volume and Repeat Controls -->
+						<StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="15" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0">
+							<Button Name="RepeatButton" Click="RepeatButton_Click" Background="Transparent" BorderThickness="0">
+								<materialIcons:MaterialIcon Name="RepeatIcon" Kind="Repeat" Width="24" Height="24" Foreground="White" />
+							</Button>
+							<materialIcons:MaterialIcon Kind="VolumeHigh" Width="24" Height="24" VerticalAlignment="Center" />
+							<Slider Name="VolumeSlider" Width="120" Minimum="0" Maximum="100" Value="100" VerticalAlignment="Center" />
+						</StackPanel>
+					</Grid>
+				</Grid>
+			</Border>
+		</Grid>
+
+		<!-- Popup Overlay -->
+		<Grid Name="PopupOverlay" IsVisible="False" Background="#88000000" ZIndex="100">
+			<modals:UpdatePopupView Name="UpdatePopup" HorizontalAlignment="Center" VerticalAlignment="Center" />
+		</Grid>
 	</Grid>
 </Window>

@@ -4,7 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:materialIcons="using:Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-             x:Class="AuroraMusic.SettingsView">
+             x:Class="AuroraMusic.Views.SettingsView">
 	<Border Background="#44000000" Padding="20">
 		<StackPanel Spacing="15">
 			<TextBlock Text="Settings" FontSize="24" FontWeight="Bold" Foreground="White" />

@@ -5,7 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using System;
 
-namespace AuroraMusic;
+namespace AuroraMusic.Views;
 
 public partial class SettingsView : UserControl
 {
