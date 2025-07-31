@@ -12,10 +12,10 @@ namespace AuroraMusic.Models
         public int Id { get; set; }
 
         [Required]
-        public string Title { get; set; }
+        public string? Title { get; set; }
 
         public int ArtistId { get; set; }
-        public Artist Artist { get; set; }
+        public Artist? Artist { get; set; }
 
         // We will store the raw image data for the album art in the database.
         public byte[]? AlbumArt { get; set; }

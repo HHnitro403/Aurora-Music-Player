@@ -29,6 +29,7 @@ namespace AuroraMusic
         private LibVLC _libVLC;
         private MediaPlayer _mediaPlayer;
         private RepeatMode _currentRepeatMode = RepeatMode.None;
+        private SortMode _currentSortMode = SortMode.ArtistAlbum;
 
         private List<PlaylistItem> _masterPlaylist = new List<PlaylistItem>();
         private List<PlaylistItem> _currentQueue = new List<PlaylistItem>();
@@ -42,6 +43,7 @@ namespace AuroraMusic
 
         private readonly System.Timers.Timer _timer;
         private readonly MusicDbContext _context;
+        
 
         public MainWindow()
         {
@@ -57,16 +59,21 @@ namespace AuroraMusic
             _updatePopup.OkClicked += HidePopup;
 
             _dbService = new DatabaseService();
+            _context = new MusicDbContext();
+            _appSettings = new AppSettings();
+            _libVLC = new LibVLC();
+            _mediaPlayer = new MediaPlayer(_libVLC);
+
             _ = InitializeApplicationAsync();
 
             _timer = new System.Timers.Timer(1000); // 1-second interval
             _timer.Elapsed += _timer_Elapsed;
             _timer.AutoReset = true;
 
-            // --- FIX STARTS HERE ---
+            var sortComboBox = this.FindControl<ComboBox>("SortComboBox");
+            sortComboBox.ItemsSource = Enum.GetValues(typeof(SortMode));
+            sortComboBox.SelectedIndex = (int)_currentSortMode;
 
-            // When the user presses the slider, stop the timer from updating it.
-            // We set handledEventsToo: true to ensure this event fires even if the Slider's internal components handle it first.
             SongProgressBar.AddHandler(PointerPressedEvent, (s, e) =>
             {
                 if (_mediaPlayer.Media != null)
@@ -75,25 +82,16 @@ namespace AuroraMusic
                 }
             }, RoutingStrategies.Tunnel, handledEventsToo: true);
 
-            // When the user releases the slider, seek the song to the slider's new value.
             SongProgressBar.AddHandler(PointerReleasedEvent, (s, e) =>
             {
                 if (_mediaPlayer.Media != null && _isDraggingSlider)
                 {
                     var slider = (Slider)s;
-
-                    // The slider's Maximum is the song's length in milliseconds.
-                    // Its Value is therefore the target time in milliseconds.
-                    // We set the MediaPlayer's Time property, which expects milliseconds.
                     _mediaPlayer.Time = (long)slider.Value;
-
-                    // Immediately update the time label for a responsive feel.
                     TimeLabel.Text = TimeSpan.FromMilliseconds(slider.Value).ToString(@"mm\:ss");
                 }
-                _isDraggingSlider = false; // Reset the flag
+                _isDraggingSlider = false;
             }, RoutingStrategies.Tunnel, handledEventsToo: true);
-
-            // --- FIX ENDS HERE ---
         }
 
         private async Task InitializeApplicationAsync()
@@ -140,6 +138,10 @@ namespace AuroraMusic
 
                 _currentRepeatMode = (RepeatMode)_appSettings.RepeatMode;
                 UpdateRepeatIcon();
+
+                _currentSortMode = (SortMode)_appSettings.SortMode;
+                var sortComboBox = this.FindControl<ComboBox>("SortComboBox");
+                sortComboBox.SelectedIndex = (int)_currentSortMode;
 
                 if (!string.IsNullOrEmpty(_appSettings.MusicFolderPath) && Directory.Exists(_appSettings.MusicFolderPath))
                 {
@@ -215,7 +217,7 @@ namespace AuroraMusic
                 var albumArtImage = this.FindControl<Image>("AlbumArtImage");
                 if (mainContentArea != null && albumArtImage != null)
                 {
-                    mainContentArea.Content = albumArtImage.Parent; // Go back to the border containing the image
+                    mainContentArea.Content = albumArtImage.Parent;
                 }
             }
             catch (Exception ex)
@@ -265,6 +267,7 @@ namespace AuroraMusic
                             {
                                 Title = string.IsNullOrWhiteSpace(tagFile.Tag.Title) ? Path.GetFileNameWithoutExtension(file) : tagFile.Tag.Title,
                                 Artist = string.IsNullOrWhiteSpace(tagFile.Tag.FirstPerformer) ? "Unknown Artist" : tagFile.Tag.FirstPerformer,
+                                Album = string.IsNullOrWhiteSpace(tagFile.Tag.Album) ? "Unknown Album" : tagFile.Tag.Album,
                                 FilePath = file
                             };
                             if (tagFile.Tag.Pictures.Length > 0)
@@ -282,7 +285,7 @@ namespace AuroraMusic
                 });
 
                 _masterPlaylist = loadedPlaylist;
-                UpdatePlaylistDisplay(_masterPlaylist);
+                SortAndDisplayPlaylist();
                 if (nowPlayingInfoText != null)
                 {
                     nowPlayingInfoText.Text = "Select a song to play";
@@ -292,6 +295,19 @@ namespace AuroraMusic
             {
                 ShowPopup($"An error occurred while loading files: {ex.Message}", true);
             }
+        }
+
+        private void SortAndDisplayPlaylist()
+        {
+            IEnumerable<PlaylistItem> sortedPlaylist = _currentSortMode switch
+            {
+                SortMode.Alphabetical => _masterPlaylist.OrderBy(p => p.Title),
+                SortMode.Album => _masterPlaylist.OrderBy(p => p.Album).ThenBy(p => p.Title),
+                SortMode.Artist => _masterPlaylist.OrderBy(p => p.Artist).ThenBy(p => p.Title),
+                SortMode.ArtistAlbum => _masterPlaylist.OrderBy(p => p.Artist).ThenBy(p => p.Album).ThenBy(p => p.Title),
+                _ => _masterPlaylist.OrderBy(p => p.Artist).ThenBy(p => p.Album).ThenBy(p => p.Title),
+            };
+            UpdatePlaylistDisplay(sortedPlaylist);
         }
 
         private void UpdatePlaylistDisplay(IEnumerable<PlaylistItem> items)
@@ -482,8 +498,7 @@ namespace AuroraMusic
                     }
                     else
                     {
-                        var searchBox = this.FindControl<Avalonia.Controls.TextBox>("SearchBox");
-                        SearchBox_OnTextChanged(searchBox, null); // Re-apply search/sort
+                        SortAndDisplayPlaylist();
                     }
                 }
             }
@@ -630,14 +645,14 @@ namespace AuroraMusic
                     var searchText = searchBox.Text;
                     if (string.IsNullOrWhiteSpace(searchText))
                     {
-                        UpdatePlaylistDisplay(_masterPlaylist.OrderBy(p => p.Artist).ThenBy(p => p.Title));
+                        SortAndDisplayPlaylist();
                     }
                     else
                     {
                         var filteredList = _masterPlaylist.Where(p =>
                             p.Title.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
                             p.Artist.Contains(searchText, StringComparison.OrdinalIgnoreCase)
-                        ).OrderBy(p => p.Artist).ThenBy(p => p.Title).ToList();
+                        ).ToList();
                         UpdatePlaylistDisplay(filteredList);
                     }
                 }
@@ -647,6 +662,19 @@ namespace AuroraMusic
                 ShowPopup($"An error occurred: {ex.Message}", true);
             }
         }
+
+        private async void SortComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_appSettings is null) return;
+
+        if (sender is ComboBox comboBox && comboBox.SelectedItem is SortMode sortMode)
+        {
+            _currentSortMode = sortMode;
+            _appSettings.SortMode = (int)sortMode;
+            await _dbService.SaveSettingsAsync(_appSettings);
+            SortAndDisplayPlaylist();
+        }
+    }
 
         private void OnTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
         {

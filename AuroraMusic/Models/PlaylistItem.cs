@@ -6,6 +6,7 @@ namespace AuroraMusic.Models
     {
         public string Title { get; set; } = "Unknown Title";
         public string Artist { get; set; } = "Unknown Artist";
+        public string Album { get; set; } = "Unknown Album";
         public string FilePath { get; set; } = "";
 
         // New property to hold the loaded album art image.

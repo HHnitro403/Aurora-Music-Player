@@ -18,6 +18,7 @@ namespace AuroraMusic.Data
         public DbSet<Song> Songs { get; set; }
         public DbSet<Album> Albums { get; set; }
         public DbSet<Artist> Artists { get; set; }
+        public DbSet<Folder> Folders { get; set; }
 
         private readonly string _databasePath;
 

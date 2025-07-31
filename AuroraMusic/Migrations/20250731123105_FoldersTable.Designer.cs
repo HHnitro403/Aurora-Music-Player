@@ -3,6 +3,7 @@ using System;
 using AuroraMusic.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AuroraMusic.Migrations
 {
     [DbContext(typeof(MusicDbContext))]
-    partial class MusicDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250731123105_FoldersTable")]
+    partial class FoldersTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.7");
@@ -60,9 +63,6 @@ namespace AuroraMusic.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<int>("RepeatMode")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("SortMode")
                         .HasColumnType("INTEGER");
 
                     b.Property<double>("Volume")
