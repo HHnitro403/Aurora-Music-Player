@@ -62,6 +62,38 @@ namespace AuroraMusic
             _timer = new System.Timers.Timer(1000); // 1-second interval
             _timer.Elapsed += _timer_Elapsed;
             _timer.AutoReset = true;
+
+            // --- FIX STARTS HERE ---
+
+            // When the user presses the slider, stop the timer from updating it.
+            // We set handledEventsToo: true to ensure this event fires even if the Slider's internal components handle it first.
+            SongProgressBar.AddHandler(PointerPressedEvent, (s, e) =>
+            {
+                if (_mediaPlayer.Media != null)
+                {
+                    _isDraggingSlider = true;
+                }
+            }, RoutingStrategies.Tunnel, handledEventsToo: true);
+
+            // When the user releases the slider, seek the song to the slider's new value.
+            SongProgressBar.AddHandler(PointerReleasedEvent, (s, e) =>
+            {
+                if (_mediaPlayer.Media != null && _isDraggingSlider)
+                {
+                    var slider = (Slider)s;
+
+                    // The slider's Maximum is the song's length in milliseconds.
+                    // Its Value is therefore the target time in milliseconds.
+                    // We set the MediaPlayer's Time property, which expects milliseconds.
+                    _mediaPlayer.Time = (long)slider.Value;
+
+                    // Immediately update the time label for a responsive feel.
+                    TimeLabel.Text = TimeSpan.FromMilliseconds(slider.Value).ToString(@"mm\:ss");
+                }
+                _isDraggingSlider = false; // Reset the flag
+            }, RoutingStrategies.Tunnel, handledEventsToo: true);
+
+            // --- FIX ENDS HERE ---
         }
 
         private async Task InitializeApplicationAsync()
@@ -563,19 +595,19 @@ namespace AuroraMusic
 
         private bool _isDraggingSlider = false;
 
-        private void OnPositionSliderPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+        private void OnSongProgressBarPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
         {
             _isDraggingSlider = true;
         }
 
-        private void OnPositionSliderReleased(object? sender, Avalonia.Input.PointerReleasedEventArgs e)
+        private void OnSongProgressBarReleased(object? sender, Avalonia.Input.PointerReleasedEventArgs e)
         {
             try
             {
-                var positionSlider = this.FindControl<Slider>("PositionSlider");
-                if (positionSlider != null && _mediaPlayer.Media != null)
+                var SongProgressBar = this.FindControl<Slider>("SongProgressBar");
+                if (SongProgressBar != null && _mediaPlayer.Media != null)
                 {
-                    _mediaPlayer.Time = (long)positionSlider.Value;
+                    _mediaPlayer.Time = (long)SongProgressBar.Value;
                 }
             }
             catch (Exception ex)
@@ -624,11 +656,11 @@ namespace AuroraMusic
             {
                 try
                 {
-                    var positionSlider = this.FindControl<Slider>("PositionSlider");
+                    var SongProgressBar = this.FindControl<Slider>("SongProgressBar");
                     var timeLabel = this.FindControl<TextBlock>("TimeLabel");
-                    if (positionSlider != null && timeLabel != null)
+                    if (SongProgressBar != null && timeLabel != null)
                     {
-                        positionSlider.Value = e.Time;
+                        SongProgressBar.Value = e.Time;
                         timeLabel.Text = TimeSpan.FromMilliseconds(e.Time).ToString(@"mm\:ss");
                     }
                 }
@@ -645,11 +677,11 @@ namespace AuroraMusic
             {
                 try
                 {
-                    var positionSlider = this.FindControl<Slider>("PositionSlider");
+                    var SongProgressBar = this.FindControl<Slider>("SongProgressBar");
                     var durationLabel = this.FindControl<TextBlock>("DurationLabel");
-                    if (positionSlider != null && durationLabel != null)
+                    if (SongProgressBar != null && durationLabel != null)
                     {
-                        positionSlider.Maximum = e.Length;
+                        SongProgressBar.Maximum = e.Length;
                         durationLabel.Text = TimeSpan.FromMilliseconds(e.Length).ToString(@"mm\:ss");
                     }
                 }
@@ -670,12 +702,12 @@ namespace AuroraMusic
                 {
                     if (_mediaPlayer != null && _mediaPlayer.IsPlaying)
                     {
-                        var positionSlider = this.FindControl<Slider>("PositionSlider");
+                        var SongProgressBar = this.FindControl<Slider>("SongProgressBar");
                         var positionLabel = this.FindControl<TextBlock>("TimeLabel");
 
-                        if (positionSlider != null && positionLabel != null)
+                        if (SongProgressBar != null && positionLabel != null)
                         {
-                            positionSlider.Value = _mediaPlayer.Time;
+                            SongProgressBar.Value = _mediaPlayer.Time;
                             positionLabel.Text = TimeSpan.FromMilliseconds(_mediaPlayer.Time).ToString(@"mm\:ss");
                         }
                     }
