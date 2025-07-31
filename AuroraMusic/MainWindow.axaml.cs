@@ -1,22 +1,24 @@
-﻿using Avalonia.Controls;
+﻿using AuroraMusic.Data;
+using AuroraMusic.Models;
+using AuroraMusic.Services;
+using AuroraMusic.Views;
+using AuroraMusic.Views.Modals;
+using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using LibVLCSharp.Shared;
+using Material.Icons;
+using Material.Icons.Avalonia;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Avalonia.Threading;
-using AuroraMusic.Models;
-using AuroraMusic.Services;
-using AuroraMusic.Views;
-using AuroraMusic.Views.Modals;
-using LibVLCSharp.Shared;
-using Material.Icons;
-using Material.Icons.Avalonia;
+using System.Timers;
 using TagLib;
-using Avalonia.Input;
-using Avalonia.Media;
-using Avalonia.Media.Imaging;
 
 namespace AuroraMusic
 {
@@ -38,6 +40,9 @@ namespace AuroraMusic
         private readonly DatabaseService _dbService;
         private AppSettings _appSettings;
 
+        private readonly System.Timers.Timer _timer;
+        private readonly MusicDbContext _context;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -53,6 +58,10 @@ namespace AuroraMusic
 
             _dbService = new DatabaseService();
             _ = InitializeApplicationAsync();
+
+            _timer = new System.Timers.Timer(1000); // 1-second interval
+            _timer.Elapsed += _timer_Elapsed;
+            _timer.AutoReset = true;
         }
 
         private async Task InitializeApplicationAsync()
@@ -87,134 +96,247 @@ namespace AuroraMusic
 
         private async Task ApplySettingsAsync()
         {
-            var volumeSlider = this.FindControl<Slider>("VolumeSlider");
-            volumeSlider.Value = _appSettings.Volume;
-            _mediaPlayer.Volume = (int)_appSettings.Volume;
-            volumeSlider.ValueChanged += OnVolumeChanged;
-
-            _currentRepeatMode = (RepeatMode)_appSettings.RepeatMode;
-            UpdateRepeatIcon();
-
-            if (!string.IsNullOrEmpty(_appSettings.MusicFolderPath) && Directory.Exists(_appSettings.MusicFolderPath))
+            try
             {
-                await LoadFilesFromFolder(_appSettings.MusicFolderPath);
+                var volumeSlider = this.FindControl<Slider>("VolumeSlider");
+                if (volumeSlider != null)
+                {
+                    volumeSlider.Value = _appSettings.Volume;
+                    _mediaPlayer.Volume = (int)_appSettings.Volume;
+                    volumeSlider.ValueChanged += OnVolumeChanged;
+                }
+
+                _currentRepeatMode = (RepeatMode)_appSettings.RepeatMode;
+                UpdateRepeatIcon();
+
+                if (!string.IsNullOrEmpty(_appSettings.MusicFolderPath) && Directory.Exists(_appSettings.MusicFolderPath))
+                {
+                    await LoadFilesFromFolder(_appSettings.MusicFolderPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred while applying settings: {ex.Message}", true);
             }
         }
 
         private void ShowPopup(string message, bool showOkButton)
         {
-            var popupOverlay = this.FindControl<Grid>("PopupOverlay");
-            _updatePopup.SetMessage(message, showOkButton);
-            popupOverlay.IsVisible = true;
+            Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    var popupOverlay = this.FindControl<Grid>("PopupOverlay");
+                    if (popupOverlay != null)
+                    {
+                        _updatePopup.SetMessage(message, showOkButton);
+                        popupOverlay.IsVisible = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error showing popup: {ex.Message}");
+                }
+            });
         }
 
         private void HidePopup()
         {
-            var popupOverlay = this.FindControl<Grid>("PopupOverlay");
-            popupOverlay.IsVisible = false;
+            Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    var popupOverlay = this.FindControl<Grid>("PopupOverlay");
+                    if (popupOverlay != null)
+                    {
+                        popupOverlay.IsVisible = false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error hiding popup: {ex.Message}");
+                }
+            });
         }
 
         private void SettingsButton_Click(object? sender, RoutedEventArgs e)
         {
-            var mainContentArea = this.FindControl<ContentControl>("MainContentArea");
-            mainContentArea.Content = _settingsView;
+            try
+            {
+                var mainContentArea = this.FindControl<ContentControl>("MainContentArea");
+                if (mainContentArea != null)
+                {
+                    mainContentArea.Content = _settingsView;
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
+            }
         }
 
         private void ShowMainContent()
         {
-            var mainContentArea = this.FindControl<ContentControl>("MainContentArea");
-            var albumArtImage = this.FindControl<Image>("AlbumArtImage");
-            mainContentArea.Content = albumArtImage.Parent; // Go back to the border containing the image
+            try
+            {
+                var mainContentArea = this.FindControl<ContentControl>("MainContentArea");
+                var albumArtImage = this.FindControl<Image>("AlbumArtImage");
+                if (mainContentArea != null && albumArtImage != null)
+                {
+                    mainContentArea.Content = albumArtImage.Parent; // Go back to the border containing the image
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
+            }
         }
 
         private async void OnFolderSelectedInSettings(string folderPath)
         {
-            _appSettings.MusicFolderPath = folderPath;
-            await _dbService.SaveSettingsAsync(_appSettings);
-            await LoadFilesFromFolder(folderPath);
-            ShowMainContent();
+            try
+            {
+                _appSettings.MusicFolderPath = folderPath;
+                await _dbService.SaveSettingsAsync(_appSettings);
+                await LoadFilesFromFolder(folderPath);
+                ShowMainContent();
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
+            }
         }
 
         private async Task LoadFilesFromFolder(string folderPath)
         {
-            var nowPlayingInfoText = this.FindControl<TextBlock>("NowPlayingInfoText");
-            nowPlayingInfoText.Text = "Loading...";
-
-            var supportedExtensions = new[] { ".mp3", ".flac", ".m4a", ".mp4" };
-            var files = Directory.EnumerateFiles(folderPath, "*.*", SearchOption.AllDirectories)
-                                 .Where(f => supportedExtensions.Contains(Path.GetExtension(f).ToLower()));
-
-            var loadedPlaylist = new List<PlaylistItem>();
-            await Task.Run(() =>
+            try
             {
-                foreach (var file in files)
+                var nowPlayingInfoText = this.FindControl<TextBlock>("NowPlayingInfoText");
+                if (nowPlayingInfoText != null)
                 {
-                    try
-                    {
-                        using var tagFile = TagLib.File.Create(file);
-                        var item = new PlaylistItem
-                        {
-                            Title = string.IsNullOrWhiteSpace(tagFile.Tag.Title) ? Path.GetFileNameWithoutExtension(file) : tagFile.Tag.Title,
-                            Artist = string.IsNullOrWhiteSpace(tagFile.Tag.FirstPerformer) ? "Unknown Artist" : tagFile.Tag.FirstPerformer,
-                            FilePath = file
-                        };
-                        if (tagFile.Tag.Pictures.Length > 0)
-                        {
-                            using var stream = new MemoryStream(tagFile.Tag.Pictures[0].Data.Data);
-                            item.AlbumArt = new Bitmap(stream);
-                        }
-                        loadedPlaylist.Add(item);
-                    }
-                    catch { /* Ignore invalid files */ }
+                    nowPlayingInfoText.Text = "Loading...";
                 }
-            });
 
-            _masterPlaylist = loadedPlaylist;
-            UpdatePlaylistDisplay(_masterPlaylist);
-            nowPlayingInfoText.Text = "Select a song to play";
+                var supportedExtensions = new[] { ".mp3", ".flac", ".m4a", ".mp4" };
+                var files = Directory.EnumerateFiles(folderPath, "*.*", SearchOption.AllDirectories)
+                                     .Where(f => supportedExtensions.Contains(Path.GetExtension(f).ToLower()));
+
+                var loadedPlaylist = new List<PlaylistItem>();
+                await Task.Run(() =>
+                {
+                    foreach (var file in files)
+                    {
+                        try
+                        {
+                            using var tagFile = TagLib.File.Create(file);
+                            var item = new PlaylistItem
+                            {
+                                Title = string.IsNullOrWhiteSpace(tagFile.Tag.Title) ? Path.GetFileNameWithoutExtension(file) : tagFile.Tag.Title,
+                                Artist = string.IsNullOrWhiteSpace(tagFile.Tag.FirstPerformer) ? "Unknown Artist" : tagFile.Tag.FirstPerformer,
+                                FilePath = file
+                            };
+                            if (tagFile.Tag.Pictures.Length > 0)
+                            {
+                                using var stream = new MemoryStream(tagFile.Tag.Pictures[0].Data.Data);
+                                item.AlbumArt = new Bitmap(stream);
+                            }
+                            loadedPlaylist.Add(item);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error loading file metadata: {ex.Message}");
+                        }
+                    }
+                });
+
+                _masterPlaylist = loadedPlaylist;
+                UpdatePlaylistDisplay(_masterPlaylist);
+                if (nowPlayingInfoText != null)
+                {
+                    nowPlayingInfoText.Text = "Select a song to play";
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred while loading files: {ex.Message}", true);
+            }
         }
 
         private void UpdatePlaylistDisplay(IEnumerable<PlaylistItem> items)
         {
-            var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
-            playlistListBox.ItemsSource = items;
+            try
+            {
+                var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
+                if (playlistListBox != null)
+                {
+                    playlistListBox.ItemsSource = items;
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
+            }
         }
 
         private void Playlist_DoubleTapped(object? sender, TappedEventArgs e)
         {
-            var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
-            if (playlistListBox.SelectedItem is PlaylistItem selectedItem)
+            try
             {
-                _currentQueue = (playlistListBox.ItemsSource as IEnumerable<PlaylistItem>).ToList();
-                _currentQueueIndex = _currentQueue.IndexOf(selectedItem);
-                PlayFile(selectedItem);
+                var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
+                if (playlistListBox != null && playlistListBox.SelectedItem is PlaylistItem selectedItem)
+                {
+                    _currentQueue = (playlistListBox.ItemsSource as IEnumerable<PlaylistItem>).ToList();
+                    _currentQueueIndex = _currentQueue.IndexOf(selectedItem);
+                    PlayFile(selectedItem);
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
             }
         }
 
         private void PlayFile(PlaylistItem item)
         {
-            if (item == null) return;
+            try
+            {
+                if (item == null) return;
 
-            if (_mediaPlayer.IsPlaying) _mediaPlayer.Stop();
+                if (_mediaPlayer.IsPlaying) _mediaPlayer.Stop();
 
-            var media = new Media(_libVLC, new Uri(item.FilePath));
-            _mediaPlayer.Media = media;
-            _mediaPlayer.Play();
-            media.Dispose();
+                var media = new Media(_libVLC, new Uri(item.FilePath));
+                _mediaPlayer.Media = media;
+                _mediaPlayer.Play();
+                media.Dispose();
 
-            var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
-            playPauseIcon.Kind = MaterialIconKind.Pause;
-            UpdateNowPlaying(item);
+                var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
+                if (playPauseIcon != null)
+                {
+                    playPauseIcon.Kind = MaterialIconKind.Pause;
+                }
+                UpdateNowPlaying(item);
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred while playing the file: {ex.Message}", true);
+            }
         }
 
         private void UpdateNowPlaying(PlaylistItem? item)
         {
-            var nowPlayingInfoText = this.FindControl<TextBlock>("NowPlayingInfoText");
-            var albumArtImage = this.FindControl<Image>("AlbumArtImage");
-            if (item != null)
+            try
             {
-                nowPlayingInfoText.Text = $"{item.Artist} - {item.Title}";
-                albumArtImage.Source = item.AlbumArt;
+                var nowPlayingInfoText = this.FindControl<TextBlock>("NowPlayingInfoText");
+                var albumArtImage = this.FindControl<Image>("AlbumArtImage");
+                if (item != null && nowPlayingInfoText != null && albumArtImage != null)
+                {
+                    nowPlayingInfoText.Text = $"{item.Artist} - {item.Title}";
+                    albumArtImage.Source = item.AlbumArt;
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
             }
         }
 
@@ -222,125 +344,199 @@ namespace AuroraMusic
         {
             Dispatcher.UIThread.InvokeAsync(() =>
             {
-                if (_currentRepeatMode == RepeatMode.RepeatTrack && _currentQueueIndex > -1)
+                try
                 {
-                    PlayFile(_currentQueue[_currentQueueIndex]);
+                    if (_currentRepeatMode == RepeatMode.RepeatTrack && _currentQueueIndex > -1)
+                    {
+                        PlayFile(_currentQueue[_currentQueueIndex]);
+                    }
+                    else
+                    {
+                        PlayNext();
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    PlayNext();
+                    ShowPopup($"An error occurred: {ex.Message}", true);
                 }
             });
         }
 
         private void PlayNext()
         {
-            if (_currentQueue.Count == 0) return;
-            _currentQueueIndex++;
-            if (_currentQueueIndex >= _currentQueue.Count)
+            try
             {
-                if (_currentRepeatMode == RepeatMode.RepeatPlaylist)
+                if (_currentQueue.Count == 0) return;
+                _currentQueueIndex++;
+                if (_currentQueueIndex >= _currentQueue.Count)
                 {
-                    _currentQueueIndex = 0;
+                    if (_currentRepeatMode == RepeatMode.RepeatPlaylist)
+                    {
+                        _currentQueueIndex = 0;
+                    }
+                    else
+                    {
+                        StopPlayback();
+                        return;
+                    }
                 }
-                else
-                {
-                    StopPlayback();
-                    return;
-                }
+                PlayFile(_currentQueue[_currentQueueIndex]);
             }
-            PlayFile(_currentQueue[_currentQueueIndex]);
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
+            }
         }
 
         private void PlayPrevious()
         {
-            if (_currentQueue.Count == 0) return;
-            _currentQueueIndex--;
-            if (_currentQueueIndex < 0)
+            try
             {
-                _currentQueueIndex = _currentRepeatMode == RepeatMode.RepeatPlaylist ? _currentQueue.Count - 1 : 0;
+                if (_currentQueue.Count == 0) return;
+                _currentQueueIndex--;
+                if (_currentQueueIndex < 0)
+                {
+                    _currentQueueIndex = _currentRepeatMode == RepeatMode.RepeatPlaylist ? _currentQueue.Count - 1 : 0;
+                }
+                PlayFile(_currentQueue[_currentQueueIndex]);
             }
-            PlayFile(_currentQueue[_currentQueueIndex]);
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
+            }
         }
 
         private void StopPlayback()
         {
-            _mediaPlayer.Stop();
-            var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
-            var nowPlayingInfoText = this.FindControl<TextBlock>("NowPlayingInfoText");
-            playPauseIcon.Kind = MaterialIconKind.Play;
-            nowPlayingInfoText.Text = "Playlist finished";
+            try
+            {
+                _mediaPlayer.Stop();
+                var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
+                var nowPlayingInfoText = this.FindControl<TextBlock>("NowPlayingInfoText");
+                if (playPauseIcon != null)
+                {
+                    playPauseIcon.Kind = MaterialIconKind.Play;
+                }
+                if (nowPlayingInfoText != null)
+                {
+                    nowPlayingInfoText.Text = "Playlist finished";
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
+            }
         }
 
         private void ShuffleButton_Click(object? sender, RoutedEventArgs e)
         {
-            _isShuffleActive = !_isShuffleActive;
-            var shuffleIcon = this.FindControl<MaterialIcon>("ShuffleIcon");
-            shuffleIcon.Foreground = _isShuffleActive ? new SolidColorBrush(Color.FromRgb(0, 191, 255)) : Brushes.White;
+            try
+            {
+                _isShuffleActive = !_isShuffleActive;
+                var shuffleIcon = this.FindControl<MaterialIcon>("ShuffleIcon");
+                if (shuffleIcon != null)
+                {
+                    shuffleIcon.Foreground = _isShuffleActive ? new SolidColorBrush(Color.FromRgb(0, 191, 255)) : Brushes.White;
+                }
 
-            var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
-            if (_isShuffleActive)
-            {
-                var random = new Random();
-                var shuffledList = (playlistListBox.ItemsSource as IEnumerable<PlaylistItem>).OrderBy(x => random.Next()).ToList();
-                UpdatePlaylistDisplay(shuffledList);
+                var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
+                if (playlistListBox != null)
+                {
+                    if (_isShuffleActive)
+                    {
+                        var random = new Random();
+                        var shuffledList = (playlistListBox.ItemsSource as IEnumerable<PlaylistItem>).OrderBy(x => random.Next()).ToList();
+                        UpdatePlaylistDisplay(shuffledList);
+                    }
+                    else
+                    {
+                        var searchBox = this.FindControl<Avalonia.Controls.TextBox>("SearchBox");
+                        SearchBox_OnTextChanged(searchBox, null); // Re-apply search/sort
+                    }
+                }
             }
-            else
+            catch (Exception ex)
             {
-                var searchBox = this.FindControl<Avalonia.Controls.TextBox>("SearchBox");
-                SearchBox_OnTextChanged(searchBox, null); // Re-apply search/sort
+                ShowPopup($"An error occurred: {ex.Message}", true);
             }
         }
 
         private async void RepeatButton_Click(object? sender, RoutedEventArgs e)
         {
-            _currentRepeatMode = (RepeatMode)(((int)_currentRepeatMode + 1) % 3);
-            UpdateRepeatIcon();
-            _appSettings.RepeatMode = (int)_currentRepeatMode;
-            await _dbService.SaveSettingsAsync(_appSettings);
+            try
+            {
+                _currentRepeatMode = (RepeatMode)(((int)_currentRepeatMode + 1) % 3);
+                UpdateRepeatIcon();
+                _appSettings.RepeatMode = (int)_currentRepeatMode;
+                await _dbService.SaveSettingsAsync(_appSettings);
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
+            }
         }
 
         private void UpdateRepeatIcon()
         {
-            var repeatIcon = this.FindControl<MaterialIcon>("RepeatIcon");
-            switch (_currentRepeatMode)
+            try
             {
-                case RepeatMode.None:
-                    repeatIcon.Kind = MaterialIconKind.Repeat;
-                    repeatIcon.Foreground = Brushes.White;
-                    break;
+                var repeatIcon = this.FindControl<MaterialIcon>("RepeatIcon");
+                if (repeatIcon != null)
+                {
+                    switch (_currentRepeatMode)
+                    {
+                        case RepeatMode.None:
+                            repeatIcon.Kind = MaterialIconKind.Repeat;
+                            repeatIcon.Foreground = Brushes.White;
+                            break;
 
-                case RepeatMode.RepeatPlaylist:
-                    repeatIcon.Kind = MaterialIconKind.Repeat;
-                    repeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255));
-                    break;
+                        case RepeatMode.RepeatPlaylist:
+                            repeatIcon.Kind = MaterialIconKind.Repeat;
+                            repeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255));
+                            break;
 
-                case RepeatMode.RepeatTrack:
-                    repeatIcon.Kind = MaterialIconKind.RepeatOnce;
-                    repeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255));
-                    break;
+                        case RepeatMode.RepeatTrack:
+                            repeatIcon.Kind = MaterialIconKind.RepeatOnce;
+                            repeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255));
+                            break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
             }
         }
 
         private void PlayPauseButton_Click(object sender, RoutedEventArgs e)
         {
-            var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
-            if (_mediaPlayer.IsPlaying)
+            try
             {
-                _mediaPlayer.Pause();
-                playPauseIcon.Kind = MaterialIconKind.Play;
+                var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
+                if (playPauseIcon != null)
+                {
+                    if (_mediaPlayer.IsPlaying)
+                    {
+                        _mediaPlayer.Pause();
+                        playPauseIcon.Kind = MaterialIconKind.Play;
+                    }
+                    else
+                    {
+                        if (_mediaPlayer.Media != null)
+                        {
+                            _mediaPlayer.Play();
+                            playPauseIcon.Kind = MaterialIconKind.Pause;
+                        }
+                        else if (_currentQueue.Count > 0)
+                        {
+                            PlayNext();
+                        }
+                    }
+                }
             }
-            else
+            catch (Exception ex)
             {
-                if (_mediaPlayer.Media != null)
-                {
-                    _mediaPlayer.Play();
-                    playPauseIcon.Kind = MaterialIconKind.Pause;
-                }
-                else if (_currentQueue.Count > 0)
-                {
-                    PlayNext();
-                }
+                ShowPopup($"An error occurred: {ex.Message}", true);
             }
         }
 
@@ -350,57 +546,144 @@ namespace AuroraMusic
 
         private async void OnVolumeChanged(object? sender, Avalonia.Controls.Primitives.RangeBaseValueChangedEventArgs e)
         {
-            if (_mediaPlayer != null && _appSettings != null)
+            try
             {
-                _mediaPlayer.Volume = (int)e.NewValue;
-                _appSettings.Volume = e.NewValue;
-                await _dbService.SaveSettingsAsync(_appSettings);
+                if (_mediaPlayer != null && _appSettings != null)
+                {
+                    _mediaPlayer.Volume = (int)e.NewValue;
+                    _appSettings.Volume = e.NewValue;
+                    await _dbService.SaveSettingsAsync(_appSettings);
+                }
             }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
+            }
+        }
+
+        private bool _isDraggingSlider = false;
+
+        private void OnPositionSliderPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+        {
+            _isDraggingSlider = true;
         }
 
         private void OnPositionSliderReleased(object? sender, Avalonia.Input.PointerReleasedEventArgs e)
         {
-            var positionSlider = this.FindControl<Slider>("PositionSlider");
-            if (_mediaPlayer.Media != null) _mediaPlayer.Time = (long)positionSlider.Value;
+            try
+            {
+                var positionSlider = this.FindControl<Slider>("PositionSlider");
+                if (positionSlider != null && _mediaPlayer.Media != null)
+                {
+                    _mediaPlayer.Time = (long)positionSlider.Value;
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
+            }
+            finally
+            {
+                _isDraggingSlider = false;
+            }
         }
 
         private void SearchBox_OnTextChanged(object? sender, TextChangedEventArgs e)
         {
-            var searchBox = sender as Avalonia.Controls.TextBox;
-            var searchText = searchBox.Text;
-            if (string.IsNullOrWhiteSpace(searchText))
+            try
             {
-                UpdatePlaylistDisplay(_masterPlaylist.OrderBy(p => p.Artist).ThenBy(p => p.Title));
+                var searchBox = sender as Avalonia.Controls.TextBox;
+                if (searchBox != null)
+                {
+                    var searchText = searchBox.Text;
+                    if (string.IsNullOrWhiteSpace(searchText))
+                    {
+                        UpdatePlaylistDisplay(_masterPlaylist.OrderBy(p => p.Artist).ThenBy(p => p.Title));
+                    }
+                    else
+                    {
+                        var filteredList = _masterPlaylist.Where(p =>
+                            p.Title.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                            p.Artist.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+                        ).OrderBy(p => p.Artist).ThenBy(p => p.Title).ToList();
+                        UpdatePlaylistDisplay(filteredList);
+                    }
+                }
             }
-            else
+            catch (Exception ex)
             {
-                var filteredList = _masterPlaylist.Where(p =>
-                    p.Title.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                    p.Artist.Contains(searchText, StringComparison.OrdinalIgnoreCase)
-                ).OrderBy(p => p.Artist).ThenBy(p => p.Title).ToList();
-                UpdatePlaylistDisplay(filteredList);
+                ShowPopup($"An error occurred: {ex.Message}", true);
             }
         }
 
         private void OnTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
         {
-            var positionSlider = this.FindControl<Slider>("PositionSlider");
-            var timeLabel = this.FindControl<TextBlock>("TimeLabel");
+            if (_isDraggingSlider) return;
+
             Dispatcher.UIThread.InvokeAsync(() =>
             {
-                positionSlider.Value = e.Time;
-                timeLabel.Text = TimeSpan.FromMilliseconds(e.Time).ToString(@"mm\:ss");
+                try
+                {
+                    var positionSlider = this.FindControl<Slider>("PositionSlider");
+                    var timeLabel = this.FindControl<TextBlock>("TimeLabel");
+                    if (positionSlider != null && timeLabel != null)
+                    {
+                        positionSlider.Value = e.Time;
+                        timeLabel.Text = TimeSpan.FromMilliseconds(e.Time).ToString(@"mm\:ss");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error in OnTimeChanged: {ex.Message}");
+                }
             });
         }
 
         private void OnLengthChanged(object? sender, MediaPlayerLengthChangedEventArgs e)
         {
-            var positionSlider = this.FindControl<Slider>("PositionSlider");
-            var durationLabel = this.FindControl<TextBlock>("DurationLabel");
             Dispatcher.UIThread.InvokeAsync(() =>
             {
-                positionSlider.Maximum = e.Length;
-                durationLabel.Text = TimeSpan.FromMilliseconds(e.Length).ToString(@"mm\:ss");
+                try
+                {
+                    var positionSlider = this.FindControl<Slider>("PositionSlider");
+                    var durationLabel = this.FindControl<TextBlock>("DurationLabel");
+                    if (positionSlider != null && durationLabel != null)
+                    {
+                        positionSlider.Maximum = e.Length;
+                        durationLabel.Text = TimeSpan.FromMilliseconds(e.Length).ToString(@"mm\:ss");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error in OnLengthChanged: {ex.Message}");
+                }
+            });
+        }
+
+        private void _timer_Elapsed(object? sender, ElapsedEventArgs e)
+        {
+            if (_isDraggingSlider) return;
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    if (_mediaPlayer != null && _mediaPlayer.IsPlaying)
+                    {
+                        var positionSlider = this.FindControl<Slider>("PositionSlider");
+                        var positionLabel = this.FindControl<TextBlock>("TimeLabel");
+
+                        if (positionSlider != null && positionLabel != null)
+                        {
+                            positionSlider.Value = _mediaPlayer.Time;
+                            positionLabel.Text = TimeSpan.FromMilliseconds(_mediaPlayer.Time).ToString(@"mm\:ss");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error in timer elapsed: {ex.Message}");
+                }
             });
         }
     }
