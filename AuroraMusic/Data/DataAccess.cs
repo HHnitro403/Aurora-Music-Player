@@ -15,20 +15,40 @@ namespace AuroraMusic.Data
     public class MusicDbContext : DbContext
     {
         public DbSet<AppSettings> Settings { get; set; }
+        public DbSet<Song> Songs { get; set; }
+        public DbSet<Album> Albums { get; set; }
+        public DbSet<Artist> Artists { get; set; }
 
         private readonly string _databasePath;
 
         public MusicDbContext()
         {
-            // Store the database in the user's local app data folder for persistence.
             var folder = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             var appFolder = Path.Combine(folder, "AuroraMusic");
-            Directory.CreateDirectory(appFolder); // Ensure the directory exists
-            _databasePath = Path.Combine(appFolder, "Settings.db");
+            Directory.CreateDirectory(appFolder);
+            _databasePath = Path.Combine(appFolder, "settings.db");
         }
 
-        // Configure the context to use the SQLite database.
         protected override void OnConfiguring(DbContextOptionsBuilder options)
             => options.UseSqlite($"Data Source={_databasePath}");
+
+        // This method defines relationships and constraints for our tables.
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            // Ensure that artist names are unique.
+            modelBuilder.Entity<Artist>()
+                .HasIndex(a => a.Name)
+                .IsUnique();
+
+            // Ensure that an album title is unique for a given artist.
+            modelBuilder.Entity<Album>()
+                .HasIndex(a => new { a.Title, a.ArtistId })
+                .IsUnique();
+
+            // Ensure that we don't import the same song file twice.
+            modelBuilder.Entity<Song>()
+                .HasIndex(s => s.FilePath)
+                .IsUnique();
+        }
     }
 }

@@ -12,16 +12,14 @@
         Icon="/Assets/avalonia-logo.ico"
         Title="Aurora Music Player"
         Width="800" Height="600"
-        MinWidth="650" MinHeight="450"
+        MinWidth="700" MinHeight="500"
 
         TransparencyLevelHint="AcrylicBlur"
         Background="Transparent">
 
-	<!-- Main container allows for overlaying the popup -->
 	<Grid>
-		<Grid Name="MainGrid" RowDefinitions="Auto,*,Auto" ColumnDefinitions="250,*">
+		<Grid Name="MainGrid" RowDefinitions="Auto,*,Auto" ColumnDefinitions="300,*">
 
-			<!-- Header -->
 			<Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Padding="10"
                     Background="#88111111" Margin="0,30,0,0">
 				<Grid>
@@ -33,25 +31,28 @@
 				</Grid>
 			</Border>
 
-			<!-- Playlist -->
-			<ListBox Name="Playlist" Grid.Row="1" Grid.Column="0"
-                     Background="#661C1C1C" Foreground="White" BorderThickness="0"
-                     DoubleTapped="Playlist_DoubleTapped">
-				<ListBox.ItemTemplate>
-					<DataTemplate x:DataType="models:PlaylistItem">
-						<StackPanel Margin="5">
-							<TextBlock Text="{Binding Title}" FontWeight="Bold" />
-							<TextBlock Text="{Binding Artist}" FontSize="12" Foreground="LightGray" />
-						</StackPanel>
-					</DataTemplate>
-				</ListBox.ItemTemplate>
-			</ListBox>
+			<!-- Playlist and Search -->
+			<DockPanel Grid.Row="1" Grid.Column="0">
+				<TextBox Name="SearchBox" Watermark="Search Playlist..." DockPanel.Dock="Top"
+                         Margin="5" TextChanged="SearchBox_OnTextChanged" />
+				<ListBox Name="PlaylistListBox"
+                         Background="#661C1C1C" Foreground="White" BorderThickness="0"
+                         DoubleTapped="Playlist_DoubleTapped">
+					<ListBox.ItemTemplate>
+						<DataTemplate x:DataType="models:PlaylistItem">
+							<StackPanel Margin="5">
+								<TextBlock Text="{Binding Title}" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+								<TextBlock Text="{Binding Artist}" FontSize="12" Foreground="LightGray" TextTrimming="CharacterEllipsis" />
+							</StackPanel>
+						</DataTemplate>
+					</ListBox.ItemTemplate>
+				</ListBox>
+			</DockPanel>
 
-			<!-- Main Content Area -->
+			<!-- Main Content Area with Album Art -->
 			<ContentControl Name="MainContentArea" Grid.Row="1" Grid.Column="1">
-				<Border Background="#44000000">
-					<TextBlock Text="Modern Music Player" HorizontalAlignment="Center" VerticalAlignment="Center"
-                               FontSize="24" Foreground="#99FFFFFF" />
+				<Border Background="#44000000" Padding="20">
+					<Image Name="AlbumArtImage" Stretch="Uniform" />
 				</Border>
 			</ContentControl>
 
@@ -63,28 +64,25 @@
 					<TextBlock Name="DurationLabel" Grid.Row="0" Grid.Column="2" Text="00:00" VerticalAlignment="Center" Foreground="White" Margin="10,0,0,0" />
 
 					<Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" ColumnDefinitions="*,Auto,*" Margin="0,10,0,0">
-						<!-- Now Playing Info -->
 						<StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="10,0,0,0">
 							<TextBlock Name="NowPlayingInfoText" Text="-" Foreground="White" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
 						</StackPanel>
 
-						<!-- Main Controls -->
 						<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="15">
+							<Button Name="ShuffleButton" Click="ShuffleButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
+								<materialIcons:MaterialIcon Name="ShuffleIcon" Kind="Shuffle" Width="24" Height="24" />
+							</Button>
 							<Button Name="PreviousButton" Click="PreviousButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
 								<materialIcons:MaterialIcon Kind="SkipPrevious" Width="24" Height="24" />
 							</Button>
 							<Button Name="PlayPauseButton" Click="PlayPauseButton_Click" Width="60" Height="60" CornerRadius="30" Background="#BB444444" BorderBrush="#CCFFFFFF" BorderThickness="1">
 								<materialIcons:MaterialIcon Name="PlayPauseIcon" Kind="Play" Width="30" Height="30" />
 							</Button>
-							<Button Name="StopButton" Click="StopButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
-								<materialIcons:MaterialIcon Kind="Stop" Width="24" Height="24" />
-							</Button>
 							<Button Name="NextButton" Click="NextButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
 								<materialIcons:MaterialIcon Kind="SkipNext" Width="24" Height="24" />
 							</Button>
 						</StackPanel>
 
-						<!-- Volume and Repeat Controls -->
 						<StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="15" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0">
 							<Button Name="RepeatButton" Click="RepeatButton_Click" Background="Transparent" BorderThickness="0">
 								<materialIcons:MaterialIcon Name="RepeatIcon" Kind="Repeat" Width="24" Height="24" Foreground="White" />
@@ -97,7 +95,6 @@
 			</Border>
 		</Grid>
 
-		<!-- Popup Overlay -->
 		<Grid Name="PopupOverlay" IsVisible="False" Background="#88000000" ZIndex="100">
 			<modals:UpdatePopupView Name="UpdatePopup" HorizontalAlignment="Center" VerticalAlignment="Center" />
 		</Grid>

@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Avalonia.Media.Imaging;
 
 namespace AuroraMusic.Models
 {
@@ -11,6 +7,9 @@ namespace AuroraMusic.Models
         public string Title { get; set; } = "Unknown Title";
         public string Artist { get; set; } = "Unknown Artist";
         public string FilePath { get; set; } = "";
+
+        // New property to hold the loaded album art image.
+        public Bitmap? AlbumArt { get; set; }
 
         public override string ToString() => $"{Artist} - {Title}";
     }
