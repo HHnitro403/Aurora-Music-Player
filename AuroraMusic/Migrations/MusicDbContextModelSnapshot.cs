@@ -56,9 +56,6 @@ namespace AuroraMusic.Migrations
                     b.Property<bool>("IsFirstLaunch")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("MusicFolderPath")
-                        .HasColumnType("TEXT");
-
                     b.Property<int>("RepeatMode")
                         .HasColumnType("INTEGER");
 

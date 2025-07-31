@@ -1,7 +1,9 @@
 ﻿using AuroraMusic.Data;
 using AuroraMusic.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Linq;
 
 namespace AuroraMusic.Services
 {
@@ -62,6 +64,38 @@ namespace AuroraMusic.Services
                 context.Settings.Add(settings);
             }
             await context.SaveChangesAsync();
+        }
+
+        public async Task AddFolderAsync(string path)
+        {
+            using var context = GetContext();
+            // Check if the folder already exists
+            if (!await context.Folders.AnyAsync(f => f.Path == path))
+            {
+                var folder = new Folder { Path = path };
+                context.Folders.Add(folder);
+                await context.SaveChangesAsync();
+            }
+        }
+
+        public async Task RemoveFolderAsync(string path)
+        {
+            using var context = GetContext();
+            var folderToRemove = await context.Folders.FirstOrDefaultAsync(f => f.Path == path);
+            if (folderToRemove != null)
+            {
+                context.Folders.Remove(folderToRemove);
+                // Remove songs associated with this folder
+                var songsToRemove = await context.Songs.Where(s => s.FilePath != null && s.FilePath.StartsWith(path)).ToListAsync();
+                context.Songs.RemoveRange(songsToRemove);
+                await context.SaveChangesAsync();
+            }
+        }
+
+        public async Task<List<Folder>> GetAllFoldersAsync()
+        {
+            using var context = GetContext();
+            return await context.Folders.ToListAsync();
         }
     }
 }

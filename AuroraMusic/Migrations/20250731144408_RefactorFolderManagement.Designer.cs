@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AuroraMusic.Migrations
 {
     [DbContext(typeof(MusicDbContext))]
-    [Migration("20250731110359_LibraryEntities")]
-    partial class LibraryEntities
+    [Migration("20250731144408_RefactorFolderManagement")]
+    partial class RefactorFolderManagement
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -59,10 +59,10 @@ namespace AuroraMusic.Migrations
                     b.Property<bool>("IsFirstLaunch")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("MusicFolderPath")
-                        .HasColumnType("TEXT");
-
                     b.Property<int>("RepeatMode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortMode")
                         .HasColumnType("INTEGER");
 
                     b.Property<double>("Volume")
@@ -89,6 +89,20 @@ namespace AuroraMusic.Migrations
                         .IsUnique();
 
                     b.ToTable("Artists");
+                });
+
+            modelBuilder.Entity("AuroraMusic.Models.Folder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Path")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Folders");
                 });
 
             modelBuilder.Entity("AuroraMusic.Models.Song", b =>

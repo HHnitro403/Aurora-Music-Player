@@ -6,15 +6,15 @@
              xmlns:materialIcons="using:Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="AuroraMusic.Views.SettingsView">
-	<Border Background="#44000000" Padding="20">
+	<Border Background="Transparent" Padding="20">
 		<StackPanel Spacing="15">
-			<TextBlock Text="Settings" FontSize="24" FontWeight="Bold" Foreground="White" />
+			<TextBlock Text="Settings" FontSize="24" FontWeight="Bold" Classes="h1" />
 
-			<TextBlock Text="Music Library" FontSize="18" Foreground="LightGray" Margin="0,10,0,0" />
-			<TextBlock Text="Select the folder where your music files are stored." Foreground="Gray" />
+			<TextBlock Text="Music Library" FontSize="18" Classes="h2" Margin="0,10,0,0" />
+			<TextBlock Text="Select the folder where your music files are stored." Classes="body" />
 
 			<Button Name="SelectFolderButton" Click="SelectFolderButton_Click"
-                    Background="#99333333" Foreground="White" BorderThickness="1" BorderBrush="#AAFFFFFF" CornerRadius="5"
+                    Classes="accent"
                     Padding="8,5" HorizontalAlignment="Left">
 				<StackPanel Orientation="Horizontal" Spacing="8">
 					<materialIcons:MaterialIcon Kind="FolderMusic" VerticalAlignment="Center" Width="20" Height="20" />
@@ -26,7 +26,7 @@
 				<ListBox.ItemTemplate>
 					<DataTemplate x:DataType="models:Folder">
 						<Grid ColumnDefinitions="*,Auto">
-							<TextBlock Grid.Column="0" Text="{Binding Path}" Foreground="White" VerticalAlignment="Center" />
+							<TextBlock Grid.Column="0" Text="{Binding Path}" VerticalAlignment="Center" />
 							<Button Grid.Column="1" Name="DeleteFolderButton" Background="Transparent" BorderThickness="0" Click="DeleteFolderButton_Click" CommandParameter="{Binding}">
 								<materialIcons:MaterialIcon Kind="TrashCan" Foreground="Red" />
 							</Button>
@@ -35,9 +35,15 @@
 				</ListBox.ItemTemplate>
 			</ListBox>
 
+			<TextBlock Text="Appearance" FontSize="18" Classes="h2" Margin="0,10,0,0" />
+			<StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+				<TextBlock Text="Dark Theme" VerticalAlignment="Center" />
+				<ToggleSwitch Name="ThemeToggle" IsCheckedChanged="ThemeToggle_Toggled" />
+			</StackPanel>
+
 			<Button Name="BackButton" Click="BackButton_Click"
                     Content="Back to Player"
-                    Background="#99333333" Foreground="White" BorderThickness="1" BorderBrush="#AAFFFFFF" CornerRadius="5"
+                    Classes="accent"
                     Padding="8,5" HorizontalAlignment="Left" Margin="0,30,0,0" />
 		</StackPanel>
 	</Border>

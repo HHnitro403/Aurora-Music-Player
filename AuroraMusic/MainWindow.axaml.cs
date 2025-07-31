@@ -26,8 +26,8 @@ namespace AuroraMusic
     {
         private const string AppVersion = "1.1.0"; // Reverted version
 
-        private LibVLC _libVLC;
-        private MediaPlayer _mediaPlayer;
+        private LibVLC _libVLC = new LibVLC();
+        private MediaPlayer _mediaPlayer = null!;
         private RepeatMode _currentRepeatMode = RepeatMode.None;
         private SortMode _currentSortMode = SortMode.ArtistAlbum;
 
@@ -39,7 +39,7 @@ namespace AuroraMusic
         private readonly SettingsView _settingsView;
         private readonly UpdatePopupView _updatePopup;
         private readonly DatabaseService _dbService;
-        private AppSettings _appSettings;
+        private AppSettings? _appSettings = new AppSettings();
 
         private readonly System.Timers.Timer _timer;
         private readonly MusicDbContext _context;
@@ -54,15 +54,15 @@ namespace AuroraMusic
             _settingsView = new SettingsView();
             _settingsView.FolderSelected += OnFolderSelectedInSettings;
             _settingsView.GoBackRequested += ShowMainContent;
+            _settingsView.FolderRemoved += async () => await LoadAllMusicFilesAsync();
 
-            _updatePopup = this.FindControl<UpdatePopupView>("UpdatePopup");
+            _updatePopup = this.FindControl<UpdatePopupView>("UpdatePopup") ?? new UpdatePopupView(); // Added null check
             _updatePopup.OkClicked += HidePopup;
 
             _dbService = new DatabaseService();
             _context = new MusicDbContext();
             _appSettings = new AppSettings();
-            _libVLC = new LibVLC();
-            _mediaPlayer = new MediaPlayer(_libVLC);
+            
 
             _ = InitializeApplicationAsync();
 
@@ -71,27 +71,37 @@ namespace AuroraMusic
             _timer.AutoReset = true;
 
             var sortComboBox = this.FindControl<ComboBox>("SortComboBox");
-            sortComboBox.ItemsSource = Enum.GetValues(typeof(SortMode));
-            sortComboBox.SelectedIndex = (int)_currentSortMode;
-
-            SongProgressBar.AddHandler(PointerPressedEvent, (s, e) =>
+            if (sortComboBox != null)
             {
-                if (_mediaPlayer.Media != null)
-                {
-                    _isDraggingSlider = true;
-                }
-            }, RoutingStrategies.Tunnel, handledEventsToo: true);
+                sortComboBox.ItemsSource = Enum.GetValues(typeof(SortMode));
+                sortComboBox.SelectedIndex = (int)_currentSortMode;
+            }
 
-            SongProgressBar.AddHandler(PointerReleasedEvent, (s, e) =>
+            var songProgressBar = this.FindControl<Slider>("SongProgressBar");
+            if (songProgressBar != null)
             {
-                if (_mediaPlayer.Media != null && _isDraggingSlider)
+                songProgressBar.AddHandler(PointerPressedEvent, (s, e) =>
                 {
-                    var slider = (Slider)s;
-                    _mediaPlayer.Time = (long)slider.Value;
-                    TimeLabel.Text = TimeSpan.FromMilliseconds(slider.Value).ToString(@"mm\:ss");
-                }
-                _isDraggingSlider = false;
-            }, RoutingStrategies.Tunnel, handledEventsToo: true);
+                    if (_mediaPlayer?.Media != null)
+                    {
+                        _isDraggingSlider = true;
+                    }
+                }, RoutingStrategies.Tunnel, handledEventsToo: true);
+
+                songProgressBar.AddHandler(PointerReleasedEvent, (s, e) =>
+                {
+                    if (_mediaPlayer.Media != null && _isDraggingSlider && s is Slider slider)
+                    {
+                        _mediaPlayer.Time = (long)slider.Value;
+                        var timeLabel = this.FindControl<TextBlock>("TimeLabel");
+                        if (timeLabel != null)
+                        {
+                            timeLabel.Text = TimeSpan.FromMilliseconds(slider.Value).ToString(@"mm\:ss");
+                        }
+                    }
+                    _isDraggingSlider = false;
+                }, RoutingStrategies.Tunnel, handledEventsToo: true);
+            }
         }
 
         private async Task InitializeApplicationAsync()
@@ -102,7 +112,7 @@ namespace AuroraMusic
                 _appSettings = await _dbService.InitializeDatabaseAsync(AppVersion);
                 HidePopup();
 
-                if (_appSettings.IsFirstLaunch)
+                if (_appSettings != null && _appSettings.IsFirstLaunch)
                 {
                     _appSettings.IsFirstLaunch = false;
                     await _dbService.SaveSettingsAsync(_appSettings);
@@ -110,13 +120,13 @@ namespace AuroraMusic
                 }
 
                 Core.Initialize();
-                _libVLC = new LibVLC();
                 _mediaPlayer = new MediaPlayer(_libVLC);
                 _mediaPlayer.EndReached += OnEndReached;
                 _mediaPlayer.TimeChanged += OnTimeChanged;
                 _mediaPlayer.LengthChanged += OnLengthChanged;
 
                 await ApplySettingsAsync();
+                await LoadAllMusicFilesAsync();
             }
             catch (Exception ex)
             {
@@ -129,24 +139,27 @@ namespace AuroraMusic
             try
             {
                 var volumeSlider = this.FindControl<Slider>("VolumeSlider");
-                if (volumeSlider != null)
+                if (volumeSlider != null && _appSettings != null)
                 {
                     volumeSlider.Value = _appSettings.Volume;
                     _mediaPlayer.Volume = (int)_appSettings.Volume;
                     volumeSlider.ValueChanged += OnVolumeChanged;
                 }
 
-                _currentRepeatMode = (RepeatMode)_appSettings.RepeatMode;
-                UpdateRepeatIcon();
-
-                _currentSortMode = (SortMode)_appSettings.SortMode;
-                var sortComboBox = this.FindControl<ComboBox>("SortComboBox");
-                sortComboBox.SelectedIndex = (int)_currentSortMode;
-
-                if (!string.IsNullOrEmpty(_appSettings.MusicFolderPath) && Directory.Exists(_appSettings.MusicFolderPath))
+                if (_appSettings != null)
                 {
-                    await LoadFilesFromFolder(_appSettings.MusicFolderPath);
+                    _currentRepeatMode = (RepeatMode)_appSettings.RepeatMode;
+                    UpdateRepeatIcon();
+
+                    _currentSortMode = (SortMode)_appSettings.SortMode;
+                    var sortComboBox = this.FindControl<ComboBox>("SortComboBox");
+                    if (sortComboBox != null)
+                    {
+                        sortComboBox.SelectedIndex = (int)_currentSortMode;
+                    }
                 }
+
+                await LoadAllMusicFilesAsync();
             }
             catch (Exception ex)
             {
@@ -230,9 +243,8 @@ namespace AuroraMusic
         {
             try
             {
-                _appSettings.MusicFolderPath = folderPath;
-                await _dbService.SaveSettingsAsync(_appSettings);
-                await LoadFilesFromFolder(folderPath);
+                await _dbService.AddFolderAsync(folderPath);
+                await LoadAllMusicFilesAsync();
                 ShowMainContent();
             }
             catch (Exception ex)
@@ -241,7 +253,7 @@ namespace AuroraMusic
             }
         }
 
-        private async Task LoadFilesFromFolder(string folderPath)
+        private async Task LoadAllMusicFilesAsync()
         {
             try
             {
@@ -251,38 +263,46 @@ namespace AuroraMusic
                     nowPlayingInfoText.Text = "Loading...";
                 }
 
+                var folders = await _dbService.GetAllFoldersAsync();
                 var supportedExtensions = new[] { ".mp3", ".flac", ".m4a", ".mp4" };
-                var files = Directory.EnumerateFiles(folderPath, "*.*", SearchOption.AllDirectories)
-                                     .Where(f => supportedExtensions.Contains(Path.GetExtension(f).ToLower()));
-
                 var loadedPlaylist = new List<PlaylistItem>();
-                await Task.Run(() =>
+
+                foreach (var folder in folders)
                 {
-                    foreach (var file in files)
+                    if (Directory.Exists(folder.Path))
                     {
-                        try
+                        var files = Directory.EnumerateFiles(folder.Path, "*.*", SearchOption.AllDirectories)
+                                             .Where(f => supportedExtensions.Contains(Path.GetExtension(f).ToLower()));
+
+                        await Task.Run(() =>
                         {
-                            using var tagFile = TagLib.File.Create(file);
-                            var item = new PlaylistItem
+                            foreach (var file in files)
                             {
-                                Title = string.IsNullOrWhiteSpace(tagFile.Tag.Title) ? Path.GetFileNameWithoutExtension(file) : tagFile.Tag.Title,
-                                Artist = string.IsNullOrWhiteSpace(tagFile.Tag.FirstPerformer) ? "Unknown Artist" : tagFile.Tag.FirstPerformer,
-                                Album = string.IsNullOrWhiteSpace(tagFile.Tag.Album) ? "Unknown Album" : tagFile.Tag.Album,
-                                FilePath = file
-                            };
-                            if (tagFile.Tag.Pictures.Length > 0)
-                            {
-                                using var stream = new MemoryStream(tagFile.Tag.Pictures[0].Data.Data);
-                                item.AlbumArt = new Bitmap(stream);
+                                try
+                                {
+                                    using var tagFile = TagLib.File.Create(file);
+                                    var item = new PlaylistItem
+                                    {
+                                        Title = string.IsNullOrWhiteSpace(tagFile.Tag.Title) ? Path.GetFileNameWithoutExtension(file) : tagFile.Tag.Title,
+                                        Artist = string.IsNullOrWhiteSpace(tagFile.Tag.FirstPerformer) ? "Unknown Artist" : tagFile.Tag.FirstPerformer,
+                                        Album = string.IsNullOrWhiteSpace(tagFile.Tag.Album) ? "Unknown Album" : tagFile.Tag.Album,
+                                        FilePath = file
+                                    };
+                                    if (tagFile.Tag.Pictures.Length > 0)
+                                    {
+                                        using var stream = new MemoryStream(tagFile.Tag.Pictures[0].Data.Data);
+                                        item.AlbumArt = new Bitmap(stream);
+                                    }
+                                    loadedPlaylist.Add(item);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Error loading file metadata: {ex.Message}");
+                                }
                             }
-                            loadedPlaylist.Add(item);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Error loading file metadata: {ex.Message}");
-                        }
+                        });
                     }
-                });
+                }
 
                 _masterPlaylist = loadedPlaylist;
                 SortAndDisplayPlaylist();
@@ -296,6 +316,8 @@ namespace AuroraMusic
                 ShowPopup($"An error occurred while loading files: {ex.Message}", true);
             }
         }
+
+        
 
         private void SortAndDisplayPlaylist()
         {
@@ -333,7 +355,10 @@ namespace AuroraMusic
                 var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
                 if (playlistListBox != null && playlistListBox.SelectedItem is PlaylistItem selectedItem)
                 {
-                    _currentQueue = (playlistListBox.ItemsSource as IEnumerable<PlaylistItem>).ToList();
+                    if (playlistListBox.ItemsSource is IEnumerable<PlaylistItem> playlistItems)
+                    {
+                        _currentQueue = playlistItems.ToList();
+                    }
                     _currentQueueIndex = _currentQueue.IndexOf(selectedItem);
                     PlayFile(selectedItem);
                 }
@@ -493,8 +518,11 @@ namespace AuroraMusic
                     if (_isShuffleActive)
                     {
                         var random = new Random();
-                        var shuffledList = (playlistListBox.ItemsSource as IEnumerable<PlaylistItem>).OrderBy(x => random.Next()).ToList();
+                        var shuffledList = (playlistListBox.ItemsSource as IEnumerable<PlaylistItem>)?.OrderBy(x => random.Next()).ToList();
+                    if (shuffledList != null)
+                    {
                         UpdatePlaylistDisplay(shuffledList);
+                    }
                     }
                     else
                     {

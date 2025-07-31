@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace AuroraMusic.Migrations
 {
     /// <inheritdoc />
-    public partial class LibraryEntities : Migration
+    public partial class RefactorFolderManagement : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -22,6 +22,36 @@ namespace AuroraMusic.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Artists", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Folders",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    Path = table.Column<string>(type: "TEXT", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Folders", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Settings",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    Volume = table.Column<double>(type: "REAL", nullable: false),
+                    RepeatMode = table.Column<int>(type: "INTEGER", nullable: false),
+                    IsFirstLaunch = table.Column<bool>(type: "INTEGER", nullable: false),
+                    DatabaseVersion = table.Column<string>(type: "TEXT", nullable: false),
+                    SortMode = table.Column<int>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Settings", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -100,6 +130,12 @@ namespace AuroraMusic.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "Folders");
+
+            migrationBuilder.DropTable(
+                name: "Settings");
+
             migrationBuilder.DropTable(
                 name: "Songs");
 
