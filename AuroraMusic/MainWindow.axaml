@@ -2,108 +2,302 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="using:AuroraMusic"
         xmlns:models="using:AuroraMusic.Models"
-        xmlns:views="using:AuroraMusic.Views"
         xmlns:modals="using:AuroraMusic.Views.Modals"
         xmlns:materialIcons="using:Material.Icons.Avalonia"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="650"
         x:Class="AuroraMusic.MainWindow"
+        x:Name="TheWindow"
         Icon="/Assets/avalonia-logo.ico"
         Title="Aurora Music Player"
         Width="800" Height="600"
         MinWidth="700" MinHeight="500"
-
         TransparencyLevelHint="AcrylicBlur"
-        Background="Transparent">
+        Background="Transparent"
+        WindowStartupLocation="CenterScreen"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1">
 
-	<Grid>
-		<Grid Name="MainGrid" RowDefinitions="Auto,*,Auto" ColumnDefinitions="300,*">
+	<!--
+    Window.Styles and Resources Section
+    Here, we define all the styles and resources (like colors and brushes) for the window.
+    This approach makes the UI consistent, easier to manage, and reduces code duplication.
+    It's much better than setting properties like Background, Width, Height, etc., on every single control.
+    -->
+	<Window.Styles>
+		<!-- Base style for all MaterialIcon controls -->
+		<Style Selector="materialIcons|MaterialIcon">
+			<Setter Property="Width" Value="24" />
+			<Setter Property="Height" Value="24" />
+			<Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+		</Style>
 
-			<Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Padding="10"
-                    Background="#88111111" Margin="0,30,0,0">
-				<Grid>
-					<Button Name="SettingsButton" Click="SettingsButton_Click"
-                            Background="Transparent" BorderThickness="0" VerticalAlignment="Center"
-                            HorizontalAlignment="Right">
-						<materialIcons:MaterialIcon Kind="Cog" Width="24" Height="24" />
-					</Button>
-				</Grid>
-			</Border>
+		<!-- Style for circular playback buttons -->
+		<Style Selector="Button.Playback">
+			<Setter Property="Width" Value="50" />
+			<Setter Property="Height" Value="50" />
+			<Setter Property="CornerRadius" Value="25" />
+			<Setter Property="Background" Value="{DynamicResource ControlTransparentBrush}" />
+			<Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}" />
+			<Setter Property="BorderThickness" Value="1" />
+			<Setter Property="VerticalAlignment" Value="Center" />
+			<Setter Property="Transitions">
+				<Transitions>
+					<TransformOperationsTransition Property="RenderTransform" Duration="0.1" />
+					<BrushTransition Property="Background" Duration="0.1" />
+				</Transitions>
+			</Setter>
+		</Style>
 
-			<!-- Playlist and Search -->
-			<DockPanel Grid.Row="1" Grid.Column="0">
-				<ComboBox Name="SortComboBox" Margin="5" SelectionChanged="SortComboBox_SelectionChanged">
-					<ComboBox.ItemTemplate>
-						<DataTemplate>
-							<TextBlock Text="{Binding}"/>
-						</DataTemplate>
-					</ComboBox.ItemTemplate>
-				</ComboBox>
-				<TextBox Name="SearchBox" Watermark="Search Playlist..." DockPanel.Dock="Top"
-                         Margin="5" TextChanged="SearchBox_OnTextChanged" />
-				<ListBox Name="PlaylistListBox"
-                         Background="#661C1C1C" Foreground="White" BorderThickness="0"
-                         DoubleTapped="Playlist_DoubleTapped">
-					<ListBox.ItemTemplate>
-						<DataTemplate x:DataType="models:PlaylistItem">
-							<StackPanel Margin="5">
-								<TextBlock Text="{Binding Title}" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
-								<TextBlock Text="{Binding Artist}" FontSize="12" Foreground="LightGray" TextTrimming="CharacterEllipsis" />
-							</StackPanel>
-						</DataTemplate>
-					</ListBox.ItemTemplate>
-				</ListBox>
-			</DockPanel>
+		<!-- Hover effect for playback buttons -->
+		<Style Selector="Button.Playback:pointerover">
+			<Setter Property="Background" Value="{DynamicResource ControlHoverBrush}" />
+			<Setter Property="RenderTransform" Value="scale(1.05)" />
+		</Style>
 
-			<!-- Main Content Area with Album Art -->
-			<ContentControl Name="MainContentArea" Grid.Row="1" Grid.Column="1">
-				<Border Background="#44000000" Padding="20">
-					<Image Name="AlbumArtImage" Stretch="Uniform" />
-				</Border>
-			</ContentControl>
+		<!-- Style for the main Play/Pause button to make it more prominent -->
+		<Style Selector="Button#PlayPauseButton">
+			<Setter Property="Width" Value="60" />
+			<Setter Property="Height" Value="60" />
+			<Setter Property="CornerRadius" Value="30" />
+			<Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+		</Style>
+		<Style Selector="Button#PlayPauseButton:pointerover">
+			<Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+		</Style>
+		<Style Selector="Button#PlayPauseButton materialIcons|MaterialIcon">
+			<Setter Property="Width" Value="30" />
+			<Setter Property="Height" Value="30" />
+		</Style>
 
-			<!-- Playback Controls -->
-			<Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Padding="15" Background="#88111111">
-				<Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*,Auto">
-					<TextBlock Name="TimeLabel" Grid.Row="0" Grid.Column="0" Text="00:00" VerticalAlignment="Center" Foreground="White" Margin="0,0,10,0" />
-					<Slider Name="SongProgressBar" Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="100" Value="0" VerticalAlignment="Center" PointerPressed="OnSongProgressBarPressed" PointerReleased="OnSongProgressBarReleased" />
-					<TextBlock Name="DurationLabel" Grid.Row="0" Grid.Column="2" Text="00:00" VerticalAlignment="Center" Foreground="White" Margin="10,0,0,0" />
+		<!-- Style for transparent buttons like Settings, Repeat, etc. -->
+		<Style Selector="Button.Transparent">
+			<Setter Property="Background" Value="Transparent" />
+			<Setter Property="BorderThickness" Value="0" />
+			<Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+			<Setter Property="Transitions">
+				<Transitions>
+					<BrushTransition Property="Foreground" Duration="0.1" />
+				</Transitions>
+			</Setter>
+		</Style>
+		<Style Selector="Button.Transparent:pointerover materialIcons|MaterialIcon">
+			<Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+		</Style>
 
-					<Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" ColumnDefinitions="*,Auto,*" Margin="0,10,0,0">
-						<StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="10,0,0,0">
-							<TextBlock Name="NowPlayingInfoText" Text="-" Foreground="White" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-						</StackPanel>
+		<!-- Style for Window Control Buttons (Minimize, Maximize, Close) -->
+		<Style Selector="Button.WindowControl">
+			<Setter Property="Background" Value="Transparent" />
+			<Setter Property="BorderThickness" Value="0" />
+			<Setter Property="VerticalAlignment" Value="Stretch" />
+			<Setter Property="Width" Value="46" />
+			<Setter Property="Transitions">
+				<Transitions>
+					<BrushTransition Property="Background" Duration="0.1" />
+				</Transitions>
+			</Setter>
+		</Style>
+		<Style Selector="Button.WindowControl:pointerover">
+			<Setter Property="Background" Value="{DynamicResource ControlHoverBrush}" />
+		</Style>
+		<Style Selector="Button.WindowControl.Close:pointerover">
+			<Setter Property="Background" Value="#E81123" />
+		</Style>
+		<Style Selector="Button.WindowControl materialIcons|MaterialIcon">
+			<Setter Property="Width" Value="16" />
+			<Setter Property="Height" Value="16" />
+		</Style>
 
-						<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="15">
-							<Button Name="ShuffleButton" Click="ShuffleButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
-								<materialIcons:MaterialIcon Name="ShuffleIcon" Kind="Shuffle" Width="24" Height="24" />
+		<!-- General styling for sliders -->
+		<Style Selector="Slider">
+			<Setter Property="VerticalAlignment" Value="Center" />
+		</Style>
+
+		<!-- Styling for TextBlocks used as labels -->
+		<Style Selector="TextBlock.Label">
+			<Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+			<Setter Property="VerticalAlignment" Value="Center" />
+		</Style>
+
+		<!-- Styling for the main TabControl -->
+		<Style Selector="TabControl">
+			<Setter Property="Background" Value="Transparent" />
+		</Style>
+		<Style Selector="TabItem">
+			<Setter Property="Background" Value="Transparent" />
+			<Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+			<Setter Property="FontSize" Value="14" />
+			<Setter Property="Padding" Value="10,8" />
+			<Setter Property="Transitions">
+				<Transitions>
+					<BrushTransition Property="Foreground" Duration="0.1" />
+				</Transitions>
+			</Setter>
+		</Style>
+		<Style Selector="TabItem:selected">
+			<Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+		</Style>
+		<Style Selector="TabItem:pointerover">
+			<Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+		</Style>
+	</Window.Styles>
+
+	<Window.Resources>
+		<!-- Color Palette -->
+		<Color x:Key="PrimaryTextColor">White</Color>
+		<Color x:Key="SecondaryTextColor">LightGray</Color>
+		<Color x:Key="AccentColor">#AA444444</Color>
+		<Color x:Key="AccentHoverColor">#CC555555</Color>
+		<Color x:Key="TransparentControlColor">#99333333</Color>
+		<Color x:Key="HoverControlColor">#55555555</Color>
+		<Color x:Key="BorderControlColor">#AAFFFFFF</Color>
+		<Color x:Key="PanelBackgroundColor">#88111111</Color>
+		<Color x:Key="ListBackgroundColor">#661C1C1C</Color>
+		<Color x:Key="ContentBackgroundColor">#44000000</Color>
+
+		<!-- Brushes using the color palette -->
+		<SolidColorBrush x:Key="TextPrimaryBrush" Color="{DynamicResource PrimaryTextColor}" />
+		<SolidColorBrush x:Key="TextSecondaryBrush" Color="{DynamicResource SecondaryTextColor}" />
+		<SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}" />
+		<SolidColorBrush x:Key="AccentHoverBrush" Color="{DynamicResource AccentHoverColor}" />
+		<SolidColorBrush x:Key="ControlTransparentBrush" Color="{DynamicResource TransparentControlColor}" />
+		<SolidColorBrush x:Key="ControlHoverBrush" Color="{DynamicResource HoverControlColor}" />
+		<SolidColorBrush x:Key="ControlBorderBrush" Color="{DynamicResource BorderControlColor}" />
+		<SolidColorBrush x:Key="PanelBackgroundBrush" Color="{DynamicResource PanelBackgroundColor}" />
+		<SolidColorBrush x:Key="ListBackgroundBrush" Color="{DynamicResource ListBackgroundColor}" />
+		<SolidColorBrush x:Key="ContentBackgroundBrush" Color="{DynamicResource ContentBackgroundColor}" />
+	</Window.Resources>
+
+	<!-- The root Panel allows the PopupOverlay to sit on top of the main content -->
+	<Panel>
+		<!-- This Border now correctly handles the padding for the maximized window state -->
+		<Border Padding="{Binding #TheWindow.OffScreenMargin}">
+			<Grid Name="MainGrid" RowDefinitions="Auto,*,Auto" ColumnDefinitions="300,*">
+
+				<!-- Top Bar / Title Bar -->
+				<Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Padding="10,0,0,0"
+                        Background="{DynamicResource PanelBackgroundBrush}" Name="TitleBar"
+                        PointerPressed="TitleBar_PointerPressed">
+					<Grid ColumnDefinitions="*,Auto">
+						<!-- Tab Menu for navigation -->
+						<TabControl Grid.Column="0" VerticalAlignment="Center">
+							<TabItem Header="Tracks" />
+							<TabItem Header="Playlists" />
+							<TabItem Header="Albums" />
+							<TabItem Header="Artists" />
+						</TabControl>
+
+						<!-- Right-aligned buttons -->
+						<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+							<Button Name="SettingsButton" Click="SettingsButton_Click"
+                                    Classes="Transparent"
+                                    VerticalAlignment="Center">
+								<materialIcons:MaterialIcon Kind="Cog" />
 							</Button>
-							<Button Name="PreviousButton" Click="PreviousButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
-								<materialIcons:MaterialIcon Kind="SkipPrevious" Width="24" Height="24" />
-							</Button>
-							<Button Name="PlayPauseButton" Click="PlayPauseButton_Click" Width="60" Height="60" CornerRadius="30" Background="#BB444444" BorderBrush="#CCFFFFFF" BorderThickness="1">
-								<materialIcons:MaterialIcon Name="PlayPauseIcon" Kind="Play" Width="30" Height="30" />
-							</Button>
-							<Button Name="NextButton" Click="NextButton_Click" Width="50" Height="50" CornerRadius="25" Background="#99333333" BorderBrush="#AAFFFFFF" BorderThickness="1">
-								<materialIcons:MaterialIcon Kind="SkipNext" Width="24" Height="24" />
-							</Button>
-						</StackPanel>
 
-						<StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="15" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0">
-							<Button Name="RepeatButton" Click="RepeatButton_Click" Background="Transparent" BorderThickness="0">
-								<materialIcons:MaterialIcon Name="RepeatIcon" Kind="Repeat" Width="24" Height="24" Foreground="White" />
+							<!-- Window Control Buttons -->
+							<Button Name="MinimizeButton" Classes="WindowControl" Click="MinimizeButton_Click">
+								<materialIcons:MaterialIcon Kind="WindowMinimize" />
 							</Button>
-							<materialIcons:MaterialIcon Kind="VolumeHigh" Width="24" Height="24" VerticalAlignment="Center" />
-							<Slider Name="VolumeSlider" Width="120" Minimum="0" Maximum="100" Value="100" VerticalAlignment="Center" />
+							<Button Name="MaximizeButton" Classes="WindowControl" Click="MaximizeButton_Click">
+								<materialIcons:MaterialIcon Kind="WindowMaximize" />
+							</Button>
+							<Button Name="CloseButton" Classes="WindowControl Close" Click="CloseButton_Click">
+								<materialIcons:MaterialIcon Kind="Close" />
+							</Button>
 						</StackPanel>
 					</Grid>
-				</Grid>
-			</Border>
-		</Grid>
+				</Border>
 
+				<!-- Left Sidebar: Playlist and Search -->
+				<Grid Grid.Row="1" Grid.Column="0" RowDefinitions="Auto,Auto,*" Margin="0,0,5,0">
+					<TextBox Name="SearchBox" Watermark="Search Playlist..." Grid.Row="0"
+                             Margin="5" TextChanged="SearchBox_OnTextChanged" />
+
+					<ComboBox Name="SortComboBox" Grid.Row="1" Margin="5" SelectionChanged="SortComboBox_SelectionChanged">
+						<ComboBox.ItemTemplate>
+							<DataTemplate>
+								<TextBlock Text="{Binding}" />
+							</DataTemplate>
+						</ComboBox.ItemTemplate>
+					</ComboBox>
+
+					<ListBox Name="PlaylistListBox" Grid.Row="2"
+                             Background="{DynamicResource ListBackgroundBrush}"
+                             Foreground="{DynamicResource TextPrimaryBrush}"
+                             BorderThickness="0"
+                             DoubleTapped="Playlist_DoubleTapped">
+						<ListBox.ItemTemplate>
+							<DataTemplate x:DataType="models:PlaylistItem">
+								<StackPanel Margin="5">
+									<TextBlock Text="{Binding Title}" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+									<TextBlock Text="{Binding Artist}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+								</StackPanel>
+							</DataTemplate>
+						</ListBox.ItemTemplate>
+					</ListBox>
+				</Grid>
+
+				<!-- Main Content Area: Used to swap between Album Art and Settings -->
+				<ContentControl Name="MainContentArea" Grid.Row="1" Grid.Column="1">
+					<Border Background="{DynamicResource ContentBackgroundBrush}" Padding="20">
+						<Image Name="AlbumArtImage" Stretch="Uniform" />
+					</Border>
+				</ContentControl>
+
+				<!-- Bottom Bar: Playback Controls -->
+				<Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Padding="15" Background="{DynamicResource PanelBackgroundBrush}">
+					<Grid RowDefinitions="Auto,Auto">
+
+						<!-- Song Progress Bar -->
+						<Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
+							<TextBlock Name="TimeLabel" Grid.Column="0" Text="00:00" Classes="Label" Margin="0,0,10,0" />
+							<Slider Name="SongProgressBar" Grid.Column="1" Minimum="0" Maximum="100" Value="0" PointerPressed="OnSongProgressBarPressed" PointerReleased="OnSongProgressBarReleased" />
+							<TextBlock Name="DurationLabel" Grid.Column="2" Text="00:00" Classes="Label" Margin="10,0,0,0" />
+						</Grid>
+
+						<!-- Playback Controls and Info -->
+						<Grid Grid.Row="1" ColumnDefinitions="*,Auto,*">
+							<!-- Now Playing Info (Left Aligned) -->
+							<StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="10,0,0,0">
+								<TextBlock Name="NowPlayingInfoText" Text="-" FontSize="14" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" Classes="Label" />
+							</StackPanel>
+
+							<!-- Playback Buttons (Center Aligned) -->
+							<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="15">
+								<Button Name="ShuffleButton" Click="ShuffleButton_Click" Classes="Playback">
+									<materialIcons:MaterialIcon Name="ShuffleIcon" Kind="Shuffle" />
+								</Button>
+								<Button Name="PreviousButton" Click="PreviousButton_Click" Classes="Playback">
+									<materialIcons:MaterialIcon Kind="SkipPrevious" />
+								</Button>
+								<Button Name="PlayPauseButton" Click="PlayPauseButton_Click" Classes="Playback">
+									<materialIcons:MaterialIcon Name="PlayPauseIcon" Kind="Play" />
+								</Button>
+								<Button Name="NextButton" Click="NextButton_Click" Classes="Playback">
+									<materialIcons:MaterialIcon Kind="SkipNext" />
+								</Button>
+							</StackPanel>
+
+							<!-- Volume and Repeat Controls (Right Aligned) -->
+							<StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="15" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0">
+								<Button Name="RepeatButton" Click="RepeatButton_Click" Classes="Transparent">
+									<materialIcons:MaterialIcon Name="RepeatIcon" Kind="Repeat" />
+								</Button>
+								<materialIcons:MaterialIcon Kind="VolumeHigh" VerticalAlignment="Center" />
+								<Slider Name="VolumeSlider" Width="120" Minimum="0" Maximum="100" Value="100" />
+							</StackPanel>
+						</Grid>
+					</Grid>
+				</Border>
+			</Grid>
+		</Border>
+
+		<!-- Popup Overlay sits on top of the Border and is not affected by its padding -->
 		<Grid Name="PopupOverlay" IsVisible="False" Background="#88000000" ZIndex="100">
 			<modals:UpdatePopupView Name="UpdatePopup" HorizontalAlignment="Center" VerticalAlignment="Center" />
 		</Grid>
-	</Grid>
+	</Panel>
 </Window>

@@ -43,7 +43,6 @@ namespace AuroraMusic
 
         private readonly System.Timers.Timer _timer;
         private readonly MusicDbContext _context;
-        
 
         public MainWindow()
         {
@@ -62,7 +61,6 @@ namespace AuroraMusic
             _dbService = new DatabaseService();
             _context = new MusicDbContext();
             _appSettings = new AppSettings();
-            
 
             _ = InitializeApplicationAsync();
 
@@ -317,8 +315,6 @@ namespace AuroraMusic
             }
         }
 
-        
-
         private void SortAndDisplayPlaylist()
         {
             IEnumerable<PlaylistItem> sortedPlaylist = _currentSortMode switch
@@ -519,10 +515,10 @@ namespace AuroraMusic
                     {
                         var random = new Random();
                         var shuffledList = (playlistListBox.ItemsSource as IEnumerable<PlaylistItem>)?.OrderBy(x => random.Next()).ToList();
-                    if (shuffledList != null)
-                    {
-                        UpdatePlaylistDisplay(shuffledList);
-                    }
+                        if (shuffledList != null)
+                        {
+                            UpdatePlaylistDisplay(shuffledList);
+                        }
                     }
                     else
                     {
@@ -692,17 +688,17 @@ namespace AuroraMusic
         }
 
         private async void SortComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if (_appSettings is null) return;
-
-        if (sender is ComboBox comboBox && comboBox.SelectedItem is SortMode sortMode)
         {
-            _currentSortMode = sortMode;
-            _appSettings.SortMode = (int)sortMode;
-            await _dbService.SaveSettingsAsync(_appSettings);
-            SortAndDisplayPlaylist();
+            if (_appSettings is null) return;
+
+            if (sender is ComboBox comboBox && comboBox.SelectedItem is SortMode sortMode)
+            {
+                _currentSortMode = sortMode;
+                _appSettings.SortMode = (int)sortMode;
+                await _dbService.SaveSettingsAsync(_appSettings);
+                SortAndDisplayPlaylist();
+            }
         }
-    }
 
         private void OnTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
         {
@@ -773,6 +769,34 @@ namespace AuroraMusic
                     Console.WriteLine($"Error in timer elapsed: {ex.Message}");
                 }
             });
+        }
+
+        private void MinimizeButton_Click(object? sender, RoutedEventArgs e)
+        {
+            this.WindowState = WindowState.Minimized;
+        }
+
+        private void MaximizeButton_Click(object? sender, RoutedEventArgs e)
+        {
+            if (this.WindowState == WindowState.Maximized)
+            {
+                this.WindowState = WindowState.Normal;
+            }
+            else
+            {
+                this.WindowState = WindowState.Maximized;
+            }
+        }
+
+        private void CloseButton_Click(object? sender, RoutedEventArgs e)
+        {
+            this.Close();
+        }
+
+        private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            // This allows the window to be dragged from the title bar
+            this.BeginMoveDrag(e);
         }
     }
 }
