@@ -7,11 +7,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using TagLib;
+using Microsoft.EntityFrameworkCore;
 
 namespace AuroraMusic.Services
 {
     public class PlaylistManager
     {
+        private readonly DatabaseService _dbService;
+        private readonly Random _random;
         private List<PlaylistItem> _masterPlaylist = new List<PlaylistItem>();
         private List<PlaylistItem> _currentQueue = new List<PlaylistItem>();
         private int _currentQueueIndex = -1;
@@ -19,6 +22,12 @@ namespace AuroraMusic.Services
 
         public IReadOnlyList<PlaylistItem> CurrentQueue => _currentQueue;
         public int CurrentQueueIndex => _currentQueueIndex;
+
+        public PlaylistManager(DatabaseService dbService)
+        {
+            _dbService = dbService;
+            _random = new Random();
+        }
 
         public async Task LoadMusicFilesAsync(IEnumerable<Folder> folders)
         {
@@ -32,29 +41,41 @@ namespace AuroraMusic.Services
                     var files = Directory.EnumerateFiles(folder.Path, "*.*", SearchOption.AllDirectories)
                                          .Where(f => supportedExtensions.Contains(Path.GetExtension(f).ToLower()));
 
-                    await Task.Run(() =>
+                    foreach (var file in files)
                     {
-                        foreach (var file in files)
+                        try
                         {
                             using var tagFile = TagLib.File.Create(file);
-                                var item = new PlaylistItem
-                                {
-                                    Song = new Song
-                                    {
-                                        Title = string.IsNullOrWhiteSpace(tagFile.Tag.Title) ? Path.GetFileNameWithoutExtension(file) : tagFile.Tag.Title,
-                                        FilePath = file,
-                                        Artist = new Artist { Name = string.IsNullOrWhiteSpace(tagFile.Tag.FirstPerformer) ? "Unknown Artist" : tagFile.Tag.FirstPerformer },
-                                        Album = new Album { Title = string.IsNullOrWhiteSpace(tagFile.Tag.Album) ? "Unknown Album" : tagFile.Tag.Album, Artist = new Artist { Name = string.IsNullOrWhiteSpace(tagFile.Tag.FirstAlbumArtist) ? "Unknown Artist" : tagFile.Tag.FirstAlbumArtist } }
-                                    }
-                                };
-                                if (tagFile.Tag.Pictures.Length > 0)
-                                {
-                                    using var stream = new MemoryStream(tagFile.Tag.Pictures[0].Data.Data);
-                                    item.Song.Album.AlbumArt = stream.ToArray();
-                                }
-                                loadedPlaylist.Add(item);
+
+                            var artistName = string.IsNullOrWhiteSpace(tagFile.Tag.FirstPerformer) ? "Unknown Artist" : tagFile.Tag.FirstPerformer;
+                            var albumTitle = string.IsNullOrWhiteSpace(tagFile.Tag.Album) ? "Unknown Album" : tagFile.Tag.Album;
+                            var albumArtistName = string.IsNullOrWhiteSpace(tagFile.Tag.FirstAlbumArtist) ? "Unknown Artist" : tagFile.Tag.FirstAlbumArtist;
+
+                            // Get or create Artist
+                            var artist = await _dbService.GetOrCreateArtistAsync(artistName);
+
+                            // Get or create Album Artist
+                            var albumArtist = await _dbService.GetOrCreateArtistAsync(albumArtistName);
+
+                            // Get or create Album
+                            var album = await _dbService.GetOrCreateAlbumAsync(albumTitle, albumArtist.Id, tagFile.Tag.Pictures.Length > 0 ? tagFile.Tag.Pictures[0].Data.Data : null);
+
+                            // Get or create Song
+                            var song = await _dbService.GetOrCreateSongAsync(
+                                title: string.IsNullOrWhiteSpace(tagFile.Tag.Title) ? Path.GetFileNameWithoutExtension(file) : tagFile.Tag.Title,
+                                filePath: file,
+                                artistId: artist.Id,
+                                albumId: album.Id,
+                                duration: tagFile.Properties.Duration
+                            );
+
+                            loadedPlaylist.Add(new PlaylistItem { Song = song });
                         }
-                    });
+                        catch (Exception ex)
+                        {
+                            Serilog.Log.Error(ex, "Error loading music file: {FilePath}", file);
+                        }
+                    }
                 }
             }
             _masterPlaylist = loadedPlaylist;
@@ -64,11 +85,11 @@ namespace AuroraMusic.Services
         {
             return sortMode switch
             {
-                SortMode.Alphabetical => _masterPlaylist.OrderBy(p => p.Title),
-                SortMode.Album => _masterPlaylist.OrderBy(p => p.Album).ThenBy(p => p.Title),
-                SortMode.Artist => _masterPlaylist.OrderBy(p => p.Artist).ThenBy(p => p.Title),
-                SortMode.ArtistAlbum => _masterPlaylist.OrderBy(p => p.Artist).ThenBy(p => p.Album).ThenBy(p => p.Title),
-                _ => _masterPlaylist.OrderBy(p => p.Artist).ThenBy(p => p.Album).ThenBy(p => p.Title),
+                SortMode.Alphabetical => _masterPlaylist.OrderBy(p => p.Song?.Title),
+                SortMode.Album => _masterPlaylist.OrderBy(p => p.Song?.Album?.Title).ThenBy(p => p.Song?.Title),
+                SortMode.Artist => _masterPlaylist.OrderBy(p => p.Song?.Artist?.Name).ThenBy(p => p.Song?.Title),
+                SortMode.ArtistAlbum => _masterPlaylist.OrderBy(p => p.Song?.Artist?.Name).ThenBy(p => p.Song?.Album?.Title).ThenBy(p => p.Song?.Title),
+                _ => _masterPlaylist.OrderBy(p => p.Song?.Artist?.Name).ThenBy(p => p.Song?.Album?.Title).ThenBy(p => p.Song?.Title),
             };
         }
 
@@ -119,8 +140,7 @@ namespace AuroraMusic.Services
             _isShuffleActive = active;
             if (_isShuffleActive)
             {
-                var random = new Random();
-                return _currentQueue.OrderBy(x => random.Next());
+                return _currentQueue.OrderBy(x => _random.Next());
             }
             else
             {

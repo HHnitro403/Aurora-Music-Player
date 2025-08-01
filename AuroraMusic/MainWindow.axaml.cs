@@ -45,7 +45,7 @@ namespace AuroraMusic
 
             _dbService = new DatabaseService();
             _playbackService = new PlaybackService();
-            _playlistManager = new PlaylistManager();
+            _playlistManager = new PlaylistManager(_dbService);
 
             _settingsView = new SettingsView();
             _tracksView = new TracksView(_playlistManager, _dbService);

@@ -11,12 +11,17 @@ namespace AuroraMusic.Views
 {
     public partial class TracksView : UserControl
     {
-        private readonly PlaylistManager _playlistManager;
-        private readonly DatabaseService _dbService;
+        private readonly PlaylistManager? _playlistManager;
+        private readonly DatabaseService? _dbService;
         private AppSettings? _appSettings;
         private SortMode _currentSortMode = SortMode.ArtistAlbum;
 
         public event Action<PlaylistItem>? PlayRequested;
+
+        public TracksView()
+        {
+            InitializeComponent();
+        }
 
         public TracksView(PlaylistManager playlistManager, DatabaseService dbService)
         {
@@ -48,6 +53,7 @@ namespace AuroraMusic.Views
         public async Task LoadTracksAsync(AppSettings appSettings)
         {
             _appSettings = appSettings;
+            if (_dbService == null || _playlistManager == null) return;
             var folders = await _dbService.GetAllFoldersAsync();
             await _playlistManager.LoadMusicFilesAsync(folders);
             SortAndDisplayPlaylist();
@@ -56,6 +62,7 @@ namespace AuroraMusic.Views
         private void SearchBox_OnTextChanged(object? sender, TextChangedEventArgs e)
         {
             if (sender is not TextBox searchBox) return;
+            if (_playlistManager == null) return;
 
             var searchText = searchBox.Text;
             if (string.IsNullOrWhiteSpace(searchText))
@@ -74,7 +81,7 @@ namespace AuroraMusic.Views
 
         private async void SortComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
         {
-            if (_appSettings is null) return;
+            if (_appSettings is null || _dbService == null || _playlistManager == null) return;
 
             if (sender is ComboBox { SelectedItem: SortMode sortMode })
             {
@@ -90,13 +97,14 @@ namespace AuroraMusic.Views
             var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
             if (playlistListBox?.SelectedItem is PlaylistItem selectedItem && playlistListBox.ItemsSource is IEnumerable<PlaylistItem> items)
             {
-                _playlistManager.SetQueue(items, selectedItem);
+                _playlistManager!.SetQueue(items, selectedItem);
                 PlayRequested?.Invoke(selectedItem);
             }
         }
 
         private void SortAndDisplayPlaylist()
         {
+            if (_playlistManager == null) return;
             var sortedPlaylist = _playlistManager.GetSortedPlaylist(_currentSortMode);
             UpdatePlaylistDisplay(sortedPlaylist);
         }

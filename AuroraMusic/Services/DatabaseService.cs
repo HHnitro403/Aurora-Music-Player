@@ -1,4 +1,5 @@
-﻿using AuroraMusic.Data;
+﻿using System;
+using AuroraMusic.Data;
 using AuroraMusic.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
@@ -157,6 +158,58 @@ namespace AuroraMusic.Services
                 context.PlaylistItems.Remove(playlistItem);
                 await context.SaveChangesAsync();
             }
+        }
+
+        public async Task<Artist> GetOrCreateArtistAsync(string name)
+        {
+            using var context = GetContext();
+            var artist = await context.Artists.FirstOrDefaultAsync(a => a.Name == name);
+            if (artist == null)
+            {
+                artist = new Artist { Name = name };
+                context.Artists.Add(artist);
+                await context.SaveChangesAsync();
+            }
+            return artist;
+        }
+
+        public async Task<Album> GetOrCreateAlbumAsync(string title, int artistId, byte[]? albumArt = null)
+        {
+            using var context = GetContext();
+            var album = await context.Albums.FirstOrDefaultAsync(a => a.Title == title && a.ArtistId == artistId);
+            if (album == null)
+            {
+                album = new Album { Title = title, ArtistId = artistId, AlbumArt = albumArt };
+                context.Albums.Add(album);
+                await context.SaveChangesAsync();
+            }
+            else if (albumArt != null && album.AlbumArt == null)
+            {
+                // Update album art if it's missing
+                album.AlbumArt = albumArt;
+                await context.SaveChangesAsync();
+            }
+            return album;
+        }
+
+        public async Task<Song> GetOrCreateSongAsync(string title, string filePath, int artistId, int albumId, TimeSpan duration)
+        {
+            using var context = GetContext();
+            var song = await context.Songs.Include(s => s.Album).Include(s => s.Artist).FirstOrDefaultAsync(s => s.FilePath == filePath);
+            if (song == null)
+            {
+                song = new Song
+                {
+                    Title = title,
+                    FilePath = filePath,
+                    ArtistId = artistId,
+                    AlbumId = albumId,
+                    Duration = duration
+                };
+                context.Songs.Add(song);
+                await context.SaveChangesAsync();
+            }
+            return song;
         }
     }
 }
