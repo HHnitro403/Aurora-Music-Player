@@ -37,6 +37,9 @@ namespace AuroraMusic
         private bool _isShuffleActive = false;
 
         private readonly SettingsView _settingsView;
+        private readonly PlaylistView _playlistView;
+        private readonly AlbumView _albumView;
+        private readonly ArtistView _artistView;
         private readonly UpdatePopupView _updatePopup;
         private readonly DatabaseService _dbService;
         private AppSettings? _appSettings = new AppSettings();
@@ -54,6 +57,10 @@ namespace AuroraMusic
             _settingsView.FolderSelected += OnFolderSelectedInSettings;
             _settingsView.GoBackRequested += ShowMainContent;
             _settingsView.FolderRemoved += async () => await LoadAllMusicFilesAsync();
+
+            _playlistView = new PlaylistView();
+            _albumView = new AlbumView();
+            _artistView = new ArtistView();
 
             _updatePopup = this.FindControl<UpdatePopupView>("UpdatePopup") ?? new UpdatePopupView(); // Added null check
             _updatePopup.OkClicked += HidePopup;
@@ -797,6 +804,43 @@ namespace AuroraMusic
         {
             // This allows the window to be dragged from the title bar
             this.BeginMoveDrag(e);
+        }
+
+        private void Navigation_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                var tabControl = sender as TabControl;
+                if (tabControl != null)
+                {
+                    var mainContentArea = this.FindControl<ContentControl>("MainContentArea");
+                    if (mainContentArea != null)
+                    {
+                        switch (tabControl.SelectedIndex)
+                        {
+                            case 0: // Tracks
+                                ShowMainContent();
+                                break;
+
+                            case 1: // Playlists
+                                mainContentArea.Content = _playlistView;
+                                break;
+
+                            case 2: // Albums
+                                mainContentArea.Content = _albumView;
+                                break;
+
+                            case 3: // Artists
+                                mainContentArea.Content = _artistView;
+                                break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowPopup($"An error occurred: {ex.Message}", true);
+            }
         }
     }
 }

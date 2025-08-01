@@ -181,7 +181,7 @@
                         PointerPressed="TitleBar_PointerPressed">
 					<Grid ColumnDefinitions="*,Auto">
 						<!-- Tab Menu for navigation -->
-						<TabControl Grid.Column="0" VerticalAlignment="Center">
+						<TabControl Grid.Column="0" VerticalAlignment="Center" SelectionChanged="Navigation_SelectionChanged">
 							<TabItem Header="Tracks" />
 							<TabItem Header="Playlists" />
 							<TabItem Header="Albums" />
