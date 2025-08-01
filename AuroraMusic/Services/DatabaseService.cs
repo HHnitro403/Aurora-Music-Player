@@ -195,7 +195,11 @@ namespace AuroraMusic.Services
         public async Task<Song> GetOrCreateSongAsync(string title, string filePath, int artistId, int albumId, TimeSpan duration)
         {
             using var context = GetContext();
-            var song = await context.Songs.Include(s => s.Album).Include(s => s.Artist).FirstOrDefaultAsync(s => s.FilePath == filePath);
+            var song = await context.Songs
+                .Include(s => s.Album)
+                    .ThenInclude(a => a.Artist) // Eagerly load Artist within Album
+                .Include(s => s.Artist) // Eagerly load the Song's direct Artist
+                .FirstOrDefaultAsync(s => s.FilePath == filePath);
             if (song == null)
             {
                 song = new Song
