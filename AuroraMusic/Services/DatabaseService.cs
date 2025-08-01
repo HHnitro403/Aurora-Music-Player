@@ -97,5 +97,66 @@ namespace AuroraMusic.Services
             using var context = GetContext();
             return await context.Folders.ToListAsync();
         }
+
+        public async Task AddPlaylistAsync(Playlist playlist)
+        {
+            using var context = GetContext();
+            context.Playlists.Add(playlist);
+            await context.SaveChangesAsync();
+        }
+
+        public async Task<List<Playlist>> GetPlaylistsAsync()
+        {
+            using var context = GetContext();
+            return await context.Playlists.Include(p => p.PlaylistItems).ThenInclude(pi => pi.Song).ToListAsync();
+        }
+
+        public async Task<Playlist?> GetPlaylistByIdAsync(int id)
+        {
+            using var context = GetContext();
+            return await context.Playlists.Include(p => p.PlaylistItems).ThenInclude(pi => pi.Song).FirstOrDefaultAsync(p => p.Id == id);
+        }
+
+        public async Task UpdatePlaylistAsync(Playlist playlist)
+        {
+            using var context = GetContext();
+            context.Playlists.Update(playlist);
+            await context.SaveChangesAsync();
+        }
+
+        public async Task DeletePlaylistAsync(int id)
+        {
+            using var context = GetContext();
+            var playlistToRemove = await context.Playlists.FindAsync(id);
+            if (playlistToRemove != null)
+            {
+                context.Playlists.Remove(playlistToRemove);
+                await context.SaveChangesAsync();
+            }
+        }
+
+        public async Task AddSongToPlaylistAsync(int playlistId, int songId)
+        {
+            using var context = GetContext();
+            var playlist = await context.Playlists.Include(p => p.PlaylistItems).FirstOrDefaultAsync(p => p.Id == playlistId);
+            var song = await context.Songs.FindAsync(songId);
+
+            if (playlist != null && song != null)
+            {
+                playlist.PlaylistItems.Add(new PlaylistItem { PlaylistId = playlistId, SongId = songId });
+                await context.SaveChangesAsync();
+            }
+        }
+
+        public async Task RemoveSongFromPlaylistAsync(int playlistId, int songId)
+        {
+            using var context = GetContext();
+            var playlistItem = await context.PlaylistItems.FirstOrDefaultAsync(pi => pi.PlaylistId == playlistId && pi.SongId == songId);
+            if (playlistItem != null)
+            {
+                context.PlaylistItems.Remove(playlistItem);
+                await context.SaveChangesAsync();
+            }
+        }
     }
 }

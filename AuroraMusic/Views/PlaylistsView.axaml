@@ -1,0 +1,43 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:materialIcons="using:Material.Icons.Avalonia"
+             xmlns:models="using:AuroraMusic.Models"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="AuroraMusic.Views.PlaylistsView">
+    <Grid ColumnDefinitions="200,*" RowDefinitions="Auto,*">
+        <!-- Left Pane: Playlist List and Add Button -->
+        <StackPanel Grid.Column="0" Grid.Row="0" Grid.RowSpan="2" Margin="5">
+            <Button Content="New Playlist" HorizontalAlignment="Stretch" Margin="0,0,0,10" Name="NewPlaylistButton"/>
+            <ListBox Name="PlaylistsListBox" SelectedIndex="0">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="models:Playlist">
+                        <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </StackPanel>
+
+        <!-- Right Pane: Selected Playlist Details -->
+        <Grid Grid.Column="1" Grid.Row="0" Grid.RowSpan="2" Margin="5" RowDefinitions="Auto,*,Auto">
+            <TextBlock Name="PlaylistNameTextBlock" Text="Select a Playlist" FontSize="20" FontWeight="Bold" Margin="0,0,0,10" Grid.Row="0"/>
+            <ListBox Name="PlaylistSongsListBox" Grid.Row="1">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="models:PlaylistItem">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <materialIcons:MaterialIcon Kind="MusicNote" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                            <TextBlock Text=" - " VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding Artist}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                <Button Content="Add Song" Name="AddSongButton" Margin="0,0,10,0"/>
+                <Button Content="Remove Song" Name="RemoveSongButton"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

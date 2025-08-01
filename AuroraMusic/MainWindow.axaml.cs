@@ -1,51 +1,41 @@
-﻿using AuroraMusic.Data;
-using AuroraMusic.Models;
+﻿using AuroraMusic.Models;
 using AuroraMusic.Services;
 using AuroraMusic.Views;
-using AuroraMusic.Views.Modals;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using LibVLCSharp.Shared;
 using Material.Icons;
 using Material.Icons.Avalonia;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Timers;
-using TagLib;
 
 namespace AuroraMusic
 {
     public partial class MainWindow : Window
     {
-        private const string AppVersion = "1.1.0"; // Reverted version
+        private const string AppVersion = "1.1.0";
 
-        private LibVLC _libVLC = new LibVLC();
-        private MediaPlayer _mediaPlayer = null!;
+        private readonly PlaybackService _playbackService;
+        private readonly PlaylistManager _playlistManager;
+        private readonly UIService _uiService;
+        private readonly DatabaseService _dbService;
+
+        private AppSettings? _appSettings;
         private RepeatMode _currentRepeatMode = RepeatMode.None;
         private SortMode _currentSortMode = SortMode.ArtistAlbum;
-
-        private List<PlaylistItem> _masterPlaylist = new List<PlaylistItem>();
-        private List<PlaylistItem> _currentQueue = new List<PlaylistItem>();
-        private int _currentQueueIndex = -1;
         private bool _isShuffleActive = false;
+        private bool _isDraggingSlider = false;
 
         private readonly SettingsView _settingsView;
-        private readonly PlaylistView _playlistView;
+        private readonly TracksView _tracksView;
+        private readonly PlaylistsView _playlistView;
         private readonly AlbumView _albumView;
         private readonly ArtistView _artistView;
-        private readonly UpdatePopupView _updatePopup;
-        private readonly DatabaseService _dbService;
-        private AppSettings? _appSettings = new AppSettings();
-
-        private readonly System.Timers.Timer _timer;
-        private readonly MusicDbContext _context;
 
         public MainWindow()
         {
@@ -53,366 +43,144 @@ namespace AuroraMusic
             this.ExtendClientAreaToDecorationsHint = true;
             this.ExtendClientAreaTitleBarHeightHint = -1;
 
-            _settingsView = new SettingsView();
-            _settingsView.FolderSelected += OnFolderSelectedInSettings;
-            _settingsView.GoBackRequested += ShowMainContent;
-            _settingsView.FolderRemoved += async () => await LoadAllMusicFilesAsync();
+            _dbService = new DatabaseService();
+            _playbackService = new PlaybackService();
+            _playlistManager = new PlaylistManager();
 
-            _playlistView = new PlaylistView();
+            _settingsView = new SettingsView();
+            _tracksView = new TracksView(_playlistManager, _dbService);
+            _playlistView = new PlaylistsView(_dbService, _playlistManager, this);
             _albumView = new AlbumView();
             _artistView = new ArtistView();
 
-            _updatePopup = this.FindControl<UpdatePopupView>("UpdatePopup") ?? new UpdatePopupView(); // Added null check
-            _updatePopup.OkClicked += HidePopup;
+            _tracksView.PlayRequested += PlayFile;
+            _playlistView.PlayRequested += PlayFile;
 
-            _dbService = new DatabaseService();
-            _context = new MusicDbContext();
-            _appSettings = new AppSettings();
+            _uiService = new UIService(this, _tracksView);
 
-            _ = InitializeApplicationAsync();
+            _settingsView.FolderSelected += OnFolderSelectedInSettings;
+            _settingsView.GoBackRequested += _uiService.ShowMainContent;
+            _settingsView.FolderRemoved += async () => await LoadAllMusicFilesAsync();
 
-            _timer = new System.Timers.Timer(1000); // 1-second interval
-            _timer.Elapsed += _timer_Elapsed;
-            _timer.AutoReset = true;
+            _playbackService.EndReached += OnEndReached;
+            _playbackService.TimeChanged += OnTimeChanged;
+            _playbackService.LengthChanged += OnLengthChanged;
 
-            var sortComboBox = this.FindControl<ComboBox>("SortComboBox");
-            if (sortComboBox != null)
+            var navigationListBox = this.FindControl<ListBox>("NavigationListBox");
+            if (navigationListBox != null)
             {
-                sortComboBox.ItemsSource = Enum.GetValues(typeof(SortMode));
-                sortComboBox.SelectedIndex = (int)_currentSortMode;
+                navigationListBox.ItemsSource = new List<NavigationItem>
+                {
+                    new NavigationItem { Title = "Tracks", Icon = MaterialIconKind.MusicNote },
+                    new NavigationItem { Title = "Playlists", Icon = MaterialIconKind.PlaylistPlay },
+                    new NavigationItem { Title = "Albums", Icon = MaterialIconKind.Album },
+                    new NavigationItem { Title = "Artists", Icon = MaterialIconKind.AccountMusic },
+                    new NavigationItem { Title = "Settings", Icon = MaterialIconKind.Cog }
+                };
+                navigationListBox.SelectedIndex = 0;
             }
+
+            
 
             var songProgressBar = this.FindControl<Slider>("SongProgressBar");
             if (songProgressBar != null)
             {
-                songProgressBar.AddHandler(PointerPressedEvent, (s, e) =>
-                {
-                    if (_mediaPlayer?.Media != null)
-                    {
-                        _isDraggingSlider = true;
-                    }
-                }, RoutingStrategies.Tunnel, handledEventsToo: true);
-
+                songProgressBar.AddHandler(PointerPressedEvent, (s, e) => _isDraggingSlider = true, RoutingStrategies.Tunnel, true);
                 songProgressBar.AddHandler(PointerReleasedEvent, (s, e) =>
                 {
-                    if (_mediaPlayer.Media != null && _isDraggingSlider && s is Slider slider)
+                    if (s is Slider slider)
                     {
-                        _mediaPlayer.Time = (long)slider.Value;
-                        var timeLabel = this.FindControl<TextBlock>("TimeLabel");
-                        if (timeLabel != null)
-                        {
-                            timeLabel.Text = TimeSpan.FromMilliseconds(slider.Value).ToString(@"mm\:ss");
-                        }
+                        _playbackService.Time = (long)slider.Value;
                     }
                     _isDraggingSlider = false;
-                }, RoutingStrategies.Tunnel, handledEventsToo: true);
+                }, RoutingStrategies.Tunnel, true);
             }
+
+            _ = InitializeApplicationAsync();
         }
 
         private async Task InitializeApplicationAsync()
         {
-            try
+            _uiService.ShowPopup("Initializing...", false);
+            _appSettings = await _dbService.InitializeDatabaseAsync(AppVersion);
+            _uiService.HidePopup();
+
+            if (_appSettings != null && _appSettings.IsFirstLaunch)
             {
-                ShowPopup("Initializing...", false);
-                _appSettings = await _dbService.InitializeDatabaseAsync(AppVersion);
-                HidePopup();
-
-                if (_appSettings != null && _appSettings.IsFirstLaunch)
-                {
-                    _appSettings.IsFirstLaunch = false;
-                    await _dbService.SaveSettingsAsync(_appSettings);
-                    SettingsButton_Click(null, null);
-                }
-
-                Core.Initialize();
-                _mediaPlayer = new MediaPlayer(_libVLC);
-                _mediaPlayer.EndReached += OnEndReached;
-                _mediaPlayer.TimeChanged += OnTimeChanged;
-                _mediaPlayer.LengthChanged += OnLengthChanged;
-
-                await ApplySettingsAsync();
-                await LoadAllMusicFilesAsync();
+                _appSettings.IsFirstLaunch = false;
+                await _dbService.SaveSettingsAsync(_appSettings);
+                _uiService.ShowView(_settingsView);
             }
-            catch (Exception ex)
-            {
-                ShowPopup($"A database error occurred: {ex.Message}", true);
-            }
+
+            ApplySettings();
+            await LoadAllMusicFilesAsync();
         }
 
-        private async Task ApplySettingsAsync()
+        private void ApplySettings()
         {
-            try
+            var volumeSlider = this.FindControl<Slider>("VolumeSlider");
+            if (volumeSlider != null && _appSettings != null)
             {
-                var volumeSlider = this.FindControl<Slider>("VolumeSlider");
-                if (volumeSlider != null && _appSettings != null)
-                {
-                    volumeSlider.Value = _appSettings.Volume;
-                    _mediaPlayer.Volume = (int)_appSettings.Volume;
-                    volumeSlider.ValueChanged += OnVolumeChanged;
-                }
-
-                if (_appSettings != null)
-                {
-                    _currentRepeatMode = (RepeatMode)_appSettings.RepeatMode;
-                    UpdateRepeatIcon();
-
-                    _currentSortMode = (SortMode)_appSettings.SortMode;
-                    var sortComboBox = this.FindControl<ComboBox>("SortComboBox");
-                    if (sortComboBox != null)
-                    {
-                        sortComboBox.SelectedIndex = (int)_currentSortMode;
-                    }
-                }
-
-                await LoadAllMusicFilesAsync();
+                volumeSlider.Value = _appSettings.Volume;
+                _playbackService.Volume = (int)_appSettings.Volume;
+                volumeSlider.ValueChanged += OnVolumeChanged;
             }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred while applying settings: {ex.Message}", true);
-            }
-        }
 
-        private void ShowPopup(string message, bool showOkButton)
-        {
-            Dispatcher.UIThread.InvokeAsync(() =>
+            if (_appSettings != null)
             {
-                try
-                {
-                    var popupOverlay = this.FindControl<Grid>("PopupOverlay");
-                    if (popupOverlay != null)
-                    {
-                        _updatePopup.SetMessage(message, showOkButton);
-                        popupOverlay.IsVisible = true;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error showing popup: {ex.Message}");
-                }
-            });
-        }
+                _currentRepeatMode = (RepeatMode)_appSettings.RepeatMode;
+                UpdateRepeatIcon();
 
-        private void HidePopup()
-        {
-            Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                try
+                _currentSortMode = (SortMode)_appSettings.SortMode;
+                var sortComboBox = this.FindControl<ComboBox>("SortComboBox");
+                if (sortComboBox != null)
                 {
-                    var popupOverlay = this.FindControl<Grid>("PopupOverlay");
-                    if (popupOverlay != null)
-                    {
-                        popupOverlay.IsVisible = false;
-                    }
+                    sortComboBox.SelectedIndex = (int)_currentSortMode;
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error hiding popup: {ex.Message}");
-                }
-            });
-        }
-
-        private void SettingsButton_Click(object? sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var mainContentArea = this.FindControl<ContentControl>("MainContentArea");
-                if (mainContentArea != null)
-                {
-                    mainContentArea.Content = _settingsView;
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
-            }
-        }
-
-        private void ShowMainContent()
-        {
-            try
-            {
-                var mainContentArea = this.FindControl<ContentControl>("MainContentArea");
-                var albumArtImage = this.FindControl<Image>("AlbumArtImage");
-                if (mainContentArea != null && albumArtImage != null)
-                {
-                    mainContentArea.Content = albumArtImage.Parent;
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
             }
         }
 
         private async void OnFolderSelectedInSettings(string folderPath)
         {
-            try
-            {
-                await _dbService.AddFolderAsync(folderPath);
-                await LoadAllMusicFilesAsync();
-                ShowMainContent();
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
-            }
+            await _dbService.AddFolderAsync(folderPath);
+            await LoadAllMusicFilesAsync();
+            _uiService.ShowMainContent();
         }
 
         private async Task LoadAllMusicFilesAsync()
         {
-            try
+            var nowPlayingInfoText = this.FindControl<TextBlock>("NowPlayingInfoText");
+            if (nowPlayingInfoText != null) nowPlayingInfoText.Text = "Loading...";
+
+            if (_appSettings == null)
             {
-                var nowPlayingInfoText = this.FindControl<TextBlock>("NowPlayingInfoText");
-                if (nowPlayingInfoText != null)
-                {
-                    nowPlayingInfoText.Text = "Loading...";
-                }
-
-                var folders = await _dbService.GetAllFoldersAsync();
-                var supportedExtensions = new[] { ".mp3", ".flac", ".m4a", ".mp4" };
-                var loadedPlaylist = new List<PlaylistItem>();
-
-                foreach (var folder in folders)
-                {
-                    if (Directory.Exists(folder.Path))
-                    {
-                        var files = Directory.EnumerateFiles(folder.Path, "*.*", SearchOption.AllDirectories)
-                                             .Where(f => supportedExtensions.Contains(Path.GetExtension(f).ToLower()));
-
-                        await Task.Run(() =>
-                        {
-                            foreach (var file in files)
-                            {
-                                try
-                                {
-                                    using var tagFile = TagLib.File.Create(file);
-                                    var item = new PlaylistItem
-                                    {
-                                        Title = string.IsNullOrWhiteSpace(tagFile.Tag.Title) ? Path.GetFileNameWithoutExtension(file) : tagFile.Tag.Title,
-                                        Artist = string.IsNullOrWhiteSpace(tagFile.Tag.FirstPerformer) ? "Unknown Artist" : tagFile.Tag.FirstPerformer,
-                                        Album = string.IsNullOrWhiteSpace(tagFile.Tag.Album) ? "Unknown Album" : tagFile.Tag.Album,
-                                        FilePath = file
-                                    };
-                                    if (tagFile.Tag.Pictures.Length > 0)
-                                    {
-                                        using var stream = new MemoryStream(tagFile.Tag.Pictures[0].Data.Data);
-                                        item.AlbumArt = new Bitmap(stream);
-                                    }
-                                    loadedPlaylist.Add(item);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine($"Error loading file metadata: {ex.Message}");
-                                }
-                            }
-                        });
-                    }
-                }
-
-                _masterPlaylist = loadedPlaylist;
-                SortAndDisplayPlaylist();
-                if (nowPlayingInfoText != null)
-                {
-                    nowPlayingInfoText.Text = "Select a song to play";
-                }
+                _appSettings = await _dbService.InitializeDatabaseAsync(AppVersion);
             }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred while loading files: {ex.Message}", true);
-            }
+            await _tracksView.LoadTracksAsync(_appSettings);
+
+            if (nowPlayingInfoText != null) nowPlayingInfoText.Text = "Select a song to play";
         }
 
-        private void SortAndDisplayPlaylist()
-        {
-            IEnumerable<PlaylistItem> sortedPlaylist = _currentSortMode switch
-            {
-                SortMode.Alphabetical => _masterPlaylist.OrderBy(p => p.Title),
-                SortMode.Album => _masterPlaylist.OrderBy(p => p.Album).ThenBy(p => p.Title),
-                SortMode.Artist => _masterPlaylist.OrderBy(p => p.Artist).ThenBy(p => p.Title),
-                SortMode.ArtistAlbum => _masterPlaylist.OrderBy(p => p.Artist).ThenBy(p => p.Album).ThenBy(p => p.Title),
-                _ => _masterPlaylist.OrderBy(p => p.Artist).ThenBy(p => p.Album).ThenBy(p => p.Title),
-            };
-            UpdatePlaylistDisplay(sortedPlaylist);
-        }
+        
 
-        private void UpdatePlaylistDisplay(IEnumerable<PlaylistItem> items)
-        {
-            try
-            {
-                var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
-                if (playlistListBox != null)
-                {
-                    playlistListBox.ItemsSource = items;
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
-            }
-        }
-
-        private void Playlist_DoubleTapped(object? sender, TappedEventArgs e)
-        {
-            try
-            {
-                var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
-                if (playlistListBox != null && playlistListBox.SelectedItem is PlaylistItem selectedItem)
-                {
-                    if (playlistListBox.ItemsSource is IEnumerable<PlaylistItem> playlistItems)
-                    {
-                        _currentQueue = playlistItems.ToList();
-                    }
-                    _currentQueueIndex = _currentQueue.IndexOf(selectedItem);
-                    PlayFile(selectedItem);
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
-            }
-        }
+        
 
         private void PlayFile(PlaylistItem item)
         {
-            try
-            {
-                if (item == null) return;
-
-                if (_mediaPlayer.IsPlaying) _mediaPlayer.Stop();
-
-                var media = new Media(_libVLC, new Uri(item.FilePath));
-                _mediaPlayer.Media = media;
-                _mediaPlayer.Play();
-                media.Dispose();
-
-                var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
-                if (playPauseIcon != null)
-                {
-                    playPauseIcon.Kind = MaterialIconKind.Pause;
-                }
-                UpdateNowPlaying(item);
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred while playing the file: {ex.Message}", true);
-            }
+            _playbackService.Play(item);
+            UpdateNowPlaying(item);
+            var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
+            if (playPauseIcon != null) playPauseIcon.Kind = MaterialIconKind.Pause;
         }
 
         private void UpdateNowPlaying(PlaylistItem? item)
         {
-            try
+            var nowPlayingInfoText = this.FindControl<TextBlock>("NowPlayingInfoText");
+            var albumArtImage = this.FindControl<Image>("AlbumArtImage");
+            if (item != null && nowPlayingInfoText != null && albumArtImage != null)
             {
-                var nowPlayingInfoText = this.FindControl<TextBlock>("NowPlayingInfoText");
-                var albumArtImage = this.FindControl<Image>("AlbumArtImage");
-                if (item != null && nowPlayingInfoText != null && albumArtImage != null)
-                {
-                    nowPlayingInfoText.Text = $"{item.Artist} - {item.Title}";
-                    albumArtImage.Source = item.AlbumArt;
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
+                nowPlayingInfoText.Text = $"{item.Artist} - {item.Title}";
+                albumArtImage.Source = item.AlbumArt;
             }
         }
 
@@ -420,201 +188,89 @@ namespace AuroraMusic
         {
             Dispatcher.UIThread.InvokeAsync(() =>
             {
-                try
-                {
-                    if (_currentRepeatMode == RepeatMode.RepeatTrack && _currentQueueIndex > -1)
-                    {
-                        PlayFile(_currentQueue[_currentQueueIndex]);
-                    }
-                    else
-                    {
-                        PlayNext();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    ShowPopup($"An error occurred: {ex.Message}", true);
-                }
+                var nextSong = _playlistManager.GetNextSong(_currentRepeatMode);
+                if (nextSong != null) PlayFile(nextSong); else StopPlayback();
             });
         }
 
         private void PlayNext()
         {
-            try
-            {
-                if (_currentQueue.Count == 0) return;
-                _currentQueueIndex++;
-                if (_currentQueueIndex >= _currentQueue.Count)
-                {
-                    if (_currentRepeatMode == RepeatMode.RepeatPlaylist)
-                    {
-                        _currentQueueIndex = 0;
-                    }
-                    else
-                    {
-                        StopPlayback();
-                        return;
-                    }
-                }
-                PlayFile(_currentQueue[_currentQueueIndex]);
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
-            }
+            var nextSong = _playlistManager.GetNextSong(_currentRepeatMode);
+            if (nextSong != null) PlayFile(nextSong); else StopPlayback();
         }
 
         private void PlayPrevious()
         {
-            try
-            {
-                if (_currentQueue.Count == 0) return;
-                _currentQueueIndex--;
-                if (_currentQueueIndex < 0)
-                {
-                    _currentQueueIndex = _currentRepeatMode == RepeatMode.RepeatPlaylist ? _currentQueue.Count - 1 : 0;
-                }
-                PlayFile(_currentQueue[_currentQueueIndex]);
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
-            }
+            var prevSong = _playlistManager.GetPreviousSong(_currentRepeatMode);
+            if (prevSong != null) PlayFile(prevSong);
         }
 
         private void StopPlayback()
         {
-            try
-            {
-                _mediaPlayer.Stop();
-                var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
-                var nowPlayingInfoText = this.FindControl<TextBlock>("NowPlayingInfoText");
-                if (playPauseIcon != null)
-                {
-                    playPauseIcon.Kind = MaterialIconKind.Play;
-                }
-                if (nowPlayingInfoText != null)
-                {
-                    nowPlayingInfoText.Text = "Playlist finished";
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
-            }
+            _playbackService.Stop();
+            var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
+            if (playPauseIcon != null) playPauseIcon.Kind = MaterialIconKind.Play;
+            var nowPlayingInfoText = this.FindControl<TextBlock>("NowPlayingInfoText");
+            if (nowPlayingInfoText != null) nowPlayingInfoText.Text = "Playlist finished";
         }
 
         private void ShuffleButton_Click(object? sender, RoutedEventArgs e)
         {
-            try
-            {
-                _isShuffleActive = !_isShuffleActive;
-                var shuffleIcon = this.FindControl<MaterialIcon>("ShuffleIcon");
-                if (shuffleIcon != null)
-                {
-                    shuffleIcon.Foreground = _isShuffleActive ? new SolidColorBrush(Color.FromRgb(0, 191, 255)) : Brushes.White;
-                }
+            _isShuffleActive = !_isShuffleActive;
+            var shuffleIcon = this.FindControl<MaterialIcon>("ShuffleIcon");
+            if (shuffleIcon != null) shuffleIcon.Foreground = _isShuffleActive ? new SolidColorBrush(Color.FromRgb(0, 191, 255)) : Brushes.White;
 
-                var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
-                if (playlistListBox != null)
-                {
-                    if (_isShuffleActive)
-                    {
-                        var random = new Random();
-                        var shuffledList = (playlistListBox.ItemsSource as IEnumerable<PlaylistItem>)?.OrderBy(x => random.Next()).ToList();
-                        if (shuffledList != null)
-                        {
-                            UpdatePlaylistDisplay(shuffledList);
-                        }
-                    }
-                    else
-                    {
-                        SortAndDisplayPlaylist();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
-            }
+            var shuffledPlaylist = _playlistManager.ToggleShuffle(_isShuffleActive);
+            // _tracksView.UpdatePlaylistDisplay(shuffledPlaylist); // Moved to TracksView
         }
 
         private async void RepeatButton_Click(object? sender, RoutedEventArgs e)
         {
-            try
+            _currentRepeatMode = (RepeatMode)(((int)_currentRepeatMode + 1) % 3);
+            UpdateRepeatIcon();
+            if (_appSettings != null)
             {
-                _currentRepeatMode = (RepeatMode)(((int)_currentRepeatMode + 1) % 3);
-                UpdateRepeatIcon();
                 _appSettings.RepeatMode = (int)_currentRepeatMode;
                 await _dbService.SaveSettingsAsync(_appSettings);
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
             }
         }
 
         private void UpdateRepeatIcon()
         {
-            try
-            {
-                var repeatIcon = this.FindControl<MaterialIcon>("RepeatIcon");
-                if (repeatIcon != null)
-                {
-                    switch (_currentRepeatMode)
-                    {
-                        case RepeatMode.None:
-                            repeatIcon.Kind = MaterialIconKind.Repeat;
-                            repeatIcon.Foreground = Brushes.White;
-                            break;
+            var repeatIcon = this.FindControl<MaterialIcon>("RepeatIcon");
+            if (repeatIcon == null) return;
 
-                        case RepeatMode.RepeatPlaylist:
-                            repeatIcon.Kind = MaterialIconKind.Repeat;
-                            repeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255));
-                            break;
-
-                        case RepeatMode.RepeatTrack:
-                            repeatIcon.Kind = MaterialIconKind.RepeatOnce;
-                            repeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255));
-                            break;
-                    }
-                }
-            }
-            catch (Exception ex)
+            switch (_currentRepeatMode)
             {
-                ShowPopup($"An error occurred: {ex.Message}", true);
+                case RepeatMode.None: 
+                    repeatIcon.Kind = MaterialIconKind.Repeat; 
+                    repeatIcon.Foreground = Brushes.White; 
+                    break;
+                case RepeatMode.RepeatPlaylist: 
+                    repeatIcon.Kind = MaterialIconKind.Repeat;
+                    repeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255)); 
+                    break;
+                case RepeatMode.RepeatTrack: 
+                    repeatIcon.Kind = MaterialIconKind.RepeatOnce; 
+                    repeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255)); 
+                    break;
             }
         }
 
         private void PlayPauseButton_Click(object sender, RoutedEventArgs e)
         {
-            try
+            var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
+            if (playPauseIcon == null) return;
+
+            if (_playbackService.IsPlaying)
             {
-                var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
-                if (playPauseIcon != null)
-                {
-                    if (_mediaPlayer.IsPlaying)
-                    {
-                        _mediaPlayer.Pause();
-                        playPauseIcon.Kind = MaterialIconKind.Play;
-                    }
-                    else
-                    {
-                        if (_mediaPlayer.Media != null)
-                        {
-                            _mediaPlayer.Play();
-                            playPauseIcon.Kind = MaterialIconKind.Pause;
-                        }
-                        else if (_currentQueue.Count > 0)
-                        {
-                            PlayNext();
-                        }
-                    }
-                }
+                _playbackService.Pause();
+                playPauseIcon.Kind = MaterialIconKind.Play;
             }
-            catch (Exception ex)
+            else
             {
-                ShowPopup($"An error occurred: {ex.Message}", true);
+                _playbackService.Play();
+                playPauseIcon.Kind = MaterialIconKind.Pause;
             }
         }
 
@@ -624,108 +280,29 @@ namespace AuroraMusic
 
         private async void OnVolumeChanged(object? sender, Avalonia.Controls.Primitives.RangeBaseValueChangedEventArgs e)
         {
-            try
+            if (_appSettings != null)
             {
-                if (_mediaPlayer != null && _appSettings != null)
-                {
-                    _mediaPlayer.Volume = (int)e.NewValue;
-                    _appSettings.Volume = e.NewValue;
-                    await _dbService.SaveSettingsAsync(_appSettings);
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
-            }
-        }
-
-        private bool _isDraggingSlider = false;
-
-        private void OnSongProgressBarPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
-        {
-            _isDraggingSlider = true;
-        }
-
-        private void OnSongProgressBarReleased(object? sender, Avalonia.Input.PointerReleasedEventArgs e)
-        {
-            try
-            {
-                var SongProgressBar = this.FindControl<Slider>("SongProgressBar");
-                if (SongProgressBar != null && _mediaPlayer.Media != null)
-                {
-                    _mediaPlayer.Time = (long)SongProgressBar.Value;
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
-            }
-            finally
-            {
-                _isDraggingSlider = false;
-            }
-        }
-
-        private void SearchBox_OnTextChanged(object? sender, TextChangedEventArgs e)
-        {
-            try
-            {
-                var searchBox = sender as Avalonia.Controls.TextBox;
-                if (searchBox != null)
-                {
-                    var searchText = searchBox.Text;
-                    if (string.IsNullOrWhiteSpace(searchText))
-                    {
-                        SortAndDisplayPlaylist();
-                    }
-                    else
-                    {
-                        var filteredList = _masterPlaylist.Where(p =>
-                            p.Title.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                            p.Artist.Contains(searchText, StringComparison.OrdinalIgnoreCase)
-                        ).ToList();
-                        UpdatePlaylistDisplay(filteredList);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
-            }
-        }
-
-        private async void SortComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
-        {
-            if (_appSettings is null) return;
-
-            if (sender is ComboBox comboBox && comboBox.SelectedItem is SortMode sortMode)
-            {
-                _currentSortMode = sortMode;
-                _appSettings.SortMode = (int)sortMode;
+                _playbackService.Volume = (int)e.NewValue;
+                _appSettings.Volume = e.NewValue;
                 await _dbService.SaveSettingsAsync(_appSettings);
-                SortAndDisplayPlaylist();
             }
         }
+
+        
+
+        
 
         private void OnTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
         {
             if (_isDraggingSlider) return;
-
             Dispatcher.UIThread.InvokeAsync(() =>
             {
-                try
+                var songProgressBar = this.FindControl<Slider>("SongProgressBar");
+                var timeLabel = this.FindControl<TextBlock>("TimeLabel");
+                if (songProgressBar != null && timeLabel != null)
                 {
-                    var SongProgressBar = this.FindControl<Slider>("SongProgressBar");
-                    var timeLabel = this.FindControl<TextBlock>("TimeLabel");
-                    if (SongProgressBar != null && timeLabel != null)
-                    {
-                        SongProgressBar.Value = e.Time;
-                        timeLabel.Text = TimeSpan.FromMilliseconds(e.Time).ToString(@"mm\:ss");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error in OnTimeChanged: {ex.Message}");
+                    songProgressBar.Value = e.Time;
+                    timeLabel.Text = TimeSpan.FromMilliseconds(e.Time).ToString(@"mm\:ss");
                 }
             });
         }
@@ -734,112 +311,48 @@ namespace AuroraMusic
         {
             Dispatcher.UIThread.InvokeAsync(() =>
             {
-                try
+                var songProgressBar = this.FindControl<Slider>("SongProgressBar");
+                var durationLabel = this.FindControl<TextBlock>("DurationLabel");
+                if (songProgressBar != null && durationLabel != null)
                 {
-                    var SongProgressBar = this.FindControl<Slider>("SongProgressBar");
-                    var durationLabel = this.FindControl<TextBlock>("DurationLabel");
-                    if (SongProgressBar != null && durationLabel != null)
-                    {
-                        SongProgressBar.Maximum = e.Length;
-                        durationLabel.Text = TimeSpan.FromMilliseconds(e.Length).ToString(@"mm\:ss");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error in OnLengthChanged: {ex.Message}");
+                    songProgressBar.Maximum = e.Length;
+                    durationLabel.Text = TimeSpan.FromMilliseconds(e.Length).ToString(@"mm\:ss");
                 }
             });
         }
 
-        private void _timer_Elapsed(object? sender, ElapsedEventArgs e)
-        {
-            if (_isDraggingSlider) return;
+        private void MinimizeButton_Click(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
-            Dispatcher.UIThread.Post(() =>
+        private void MaximizeButton_Click(object? sender, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+        private void CloseButton_Click(object? sender, RoutedEventArgs e) => Close();
+
+        private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e) => BeginMoveDrag(e);
+        
+        private void SettingsButton_Click(object? sender, RoutedEventArgs e) => _uiService.ShowView(_settingsView);
+
+        private async void Navigation_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (sender is not ListBox listBox || _uiService is null) return;
+
+            switch (listBox.SelectedIndex)
             {
-                try
-                {
-                    if (_mediaPlayer != null && _mediaPlayer.IsPlaying)
-                    {
-                        var SongProgressBar = this.FindControl<Slider>("SongProgressBar");
-                        var positionLabel = this.FindControl<TextBlock>("TimeLabel");
-
-                        if (SongProgressBar != null && positionLabel != null)
-                        {
-                            SongProgressBar.Value = _mediaPlayer.Time;
-                            positionLabel.Text = TimeSpan.FromMilliseconds(_mediaPlayer.Time).ToString(@"mm\:ss");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error in timer elapsed: {ex.Message}");
-                }
-            });
-        }
-
-        private void MinimizeButton_Click(object? sender, RoutedEventArgs e)
-        {
-            this.WindowState = WindowState.Minimized;
-        }
-
-        private void MaximizeButton_Click(object? sender, RoutedEventArgs e)
-        {
-            if (this.WindowState == WindowState.Maximized)
-            {
-                this.WindowState = WindowState.Normal;
-            }
-            else
-            {
-                this.WindowState = WindowState.Maximized;
-            }
-        }
-
-        private void CloseButton_Click(object? sender, RoutedEventArgs e)
-        {
-            this.Close();
-        }
-
-        private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
-        {
-            // This allows the window to be dragged from the title bar
-            this.BeginMoveDrag(e);
-        }
-
-        private void Navigation_SelectionChanged(object? sender, SelectionChangedEventArgs e)
-        {
-            try
-            {
-                var tabControl = sender as TabControl;
-                if (tabControl != null)
-                {
-                    var mainContentArea = this.FindControl<ContentControl>("MainContentArea");
-                    if (mainContentArea != null)
-                    {
-                        switch (tabControl.SelectedIndex)
-                        {
-                            case 0: // Tracks
-                                ShowMainContent();
-                                break;
-
-                            case 1: // Playlists
-                                mainContentArea.Content = _playlistView;
-                                break;
-
-                            case 2: // Albums
-                                mainContentArea.Content = _albumView;
-                                break;
-
-                            case 3: // Artists
-                                mainContentArea.Content = _artistView;
-                                break;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                ShowPopup($"An error occurred: {ex.Message}", true);
+                case 0: // Tracks
+                    _uiService.ShowView(_tracksView);
+                    break;
+                case 1: // Playlists
+                    _uiService.ShowView(_playlistView);
+                    await _playlistView.LoadPlaylistsAsync();
+                    break;
+                case 2: // Albums
+                    _uiService.ShowView(_albumView);
+                    break;
+                case 3: // Artists
+                    _uiService.ShowView(_artistView);
+                    break;
+                case 4: // Settings
+                    _uiService.ShowView(_settingsView);
+                    break;
             }
         }
     }

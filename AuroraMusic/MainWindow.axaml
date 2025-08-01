@@ -180,21 +180,11 @@
                         Background="{DynamicResource PanelBackgroundBrush}" Name="TitleBar"
                         PointerPressed="TitleBar_PointerPressed">
 					<Grid ColumnDefinitions="*,Auto">
-						<!-- Tab Menu for navigation -->
-						<TabControl Grid.Column="0" VerticalAlignment="Center" SelectionChanged="Navigation_SelectionChanged">
-							<TabItem Header="Tracks" />
-							<TabItem Header="Playlists" />
-							<TabItem Header="Albums" />
-							<TabItem Header="Artists" />
-						</TabControl>
+						<TextBlock Grid.Column="0" Text="Aurora Music Player" VerticalAlignment="Center" FontWeight="Bold" Margin="10,0,0,0"/>
 
 						<!-- Right-aligned buttons -->
 						<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-							<Button Name="SettingsButton" Click="SettingsButton_Click"
-                                    Classes="Transparent"
-                                    VerticalAlignment="Center">
-								<materialIcons:MaterialIcon Kind="Cog" />
-							</Button>
+							
 
 							<!-- Window Control Buttons -->
 							<Button Name="MinimizeButton" Classes="WindowControl" Click="MinimizeButton_Click">
@@ -210,34 +200,19 @@
 					</Grid>
 				</Border>
 
-				<!-- Left Sidebar: Playlist and Search -->
-				<Grid Grid.Row="1" Grid.Column="0" RowDefinitions="Auto,Auto,*" Margin="0,0,5,0">
-					<TextBox Name="SearchBox" Watermark="Search Playlist..." Grid.Row="0"
-                             Margin="5" TextChanged="SearchBox_OnTextChanged" />
-
-					<ComboBox Name="SortComboBox" Grid.Row="1" Margin="5" SelectionChanged="SortComboBox_SelectionChanged">
-						<ComboBox.ItemTemplate>
-							<DataTemplate>
-								<TextBlock Text="{Binding}" />
-							</DataTemplate>
-						</ComboBox.ItemTemplate>
-					</ComboBox>
-
-					<ListBox Name="PlaylistListBox" Grid.Row="2"
-                             Background="{DynamicResource ListBackgroundBrush}"
-                             Foreground="{DynamicResource TextPrimaryBrush}"
-                             BorderThickness="0"
-                             DoubleTapped="Playlist_DoubleTapped">
-						<ListBox.ItemTemplate>
-							<DataTemplate x:DataType="models:PlaylistItem">
-								<StackPanel Margin="5">
-									<TextBlock Text="{Binding Title}" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
-									<TextBlock Text="{Binding Artist}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
-								</StackPanel>
-							</DataTemplate>
-						</ListBox.ItemTemplate>
-					</ListBox>
-				</Grid>
+				<!-- Left Sidebar: Navigation -->
+                <Grid Grid.Row="1" Grid.Column="0" RowDefinitions="Auto,*" Margin="0,0,5,0">
+                    <ListBox Name="NavigationListBox" SelectionChanged="Navigation_SelectionChanged" Background="{DynamicResource ListBackgroundBrush}" BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:NavigationItem">
+                                <StackPanel Orientation="Horizontal" Spacing="10" Margin="10">
+                                    <materialIcons:MaterialIcon Kind="{Binding Icon}" Width="20" Height="20"/>
+                                    <TextBlock Text="{Binding Title}" FontSize="14" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
 
 				<!-- Main Content Area: Used to swap between Album Art and Settings -->
 				<ContentControl Name="MainContentArea" Grid.Row="1" Grid.Column="1">
@@ -253,7 +228,7 @@
 						<!-- Song Progress Bar -->
 						<Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
 							<TextBlock Name="TimeLabel" Grid.Column="0" Text="00:00" Classes="Label" Margin="0,0,10,0" />
-							<Slider Name="SongProgressBar" Grid.Column="1" Minimum="0" Maximum="100" Value="0" PointerPressed="OnSongProgressBarPressed" PointerReleased="OnSongProgressBarReleased" />
+							<Slider Name="SongProgressBar" Grid.Column="1" Minimum="0" Maximum="100" Value="0" />
 							<TextBlock Name="DurationLabel" Grid.Column="2" Text="00:00" Classes="Label" Margin="10,0,0,0" />
 						</Grid>
 

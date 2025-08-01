@@ -1,17 +1,32 @@
-﻿using Avalonia.Media.Imaging;
+using Avalonia.Media.Imaging;
+using System.IO;
 
 namespace AuroraMusic.Models
 {
     public class PlaylistItem
     {
-        public string Title { get; set; } = "Unknown Title";
-        public string Artist { get; set; } = "Unknown Artist";
-        public string Album { get; set; } = "Unknown Album";
-        public string FilePath { get; set; } = "";
+        public int Id { get; set; }
+        public int PlaylistId { get; set; }
+        public Playlist Playlist { get; set; } = null!;
+        public int SongId { get; set; }
+        public Song Song { get; set; } = null!;
 
-        // New property to hold the loaded album art image.
-        public Bitmap? AlbumArt { get; set; }
-
-        public override string ToString() => $"{Artist} - {Title}";
+        // Properties from Song for direct access in UI/logic
+        public string Title => Song?.Title ?? "Unknown Title";
+        public string Artist => Song?.Album?.Artist?.Name ?? "Unknown Artist";
+        public string Album => Song?.Album?.Title ?? "Unknown Album";
+        public string FilePath => Song?.FilePath ?? string.Empty;
+        public Bitmap? AlbumArt
+        {
+            get
+            {
+                if (Song?.Album?.AlbumArt != null)
+                {
+                    using var stream = new MemoryStream(Song.Album.AlbumArt);
+                    return new Bitmap(stream);
+                }
+                return null;
+            }
+        }
     }
 }

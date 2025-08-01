@@ -7,9 +7,6 @@ using Microsoft.EntityFrameworkCore;
 using MsBox.Avalonia.Enums;
 using System;
 using MsBox.Avalonia;
-
-using MsBox.Avalonia.Enums;
-
 using System.Threading.Tasks;
 using Avalonia.Styling;
 using Avalonia;
