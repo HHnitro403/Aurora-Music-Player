@@ -40,6 +40,7 @@ namespace AuroraMusic
         public MainWindow()
         {
             InitializeComponent();
+            this.KeyDown += MainWindow_KeyDown;
             this.ExtendClientAreaToDecorationsHint = true;
             this.ExtendClientAreaTitleBarHeightHint = -1;
 
@@ -352,6 +353,22 @@ namespace AuroraMusic
                     break;
                 case 4: // Settings
                     _uiService.ShowView(_settingsView);
+                    break;
+            }
+        }
+
+        private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
+        {
+            switch (e.Key)
+            {
+                case Key.MediaPlayPause:
+                    PlayPauseButton_Click(this, new RoutedEventArgs());
+                    break;
+                case Key.MediaNextTrack:
+                    NextButton_Click(this, new RoutedEventArgs());
+                    break;
+                case Key.MediaPreviousTrack:
+                    PreviousButton_Click(this, new RoutedEventArgs());
                     break;
             }
         }
