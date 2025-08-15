@@ -5,7 +5,8 @@
         xmlns:models="using:AuroraMusic.Models"
         xmlns:modals="using:AuroraMusic.Views.Modals"
         xmlns:materialIcons="using:Material.Icons.Avalonia"
-        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="650"
+        xmlns:local="using:AuroraMusic"
+        Design.DesignWidth="900" Design.DesignHeight="650"
         x:Class="AuroraMusic.MainWindow"
         x:Name="TheWindow"
         Icon="/Assets/avalonia-logo.ico"
@@ -19,12 +20,6 @@
         ExtendClientAreaChromeHints="NoChrome"
         ExtendClientAreaTitleBarHeightHint="-1">
 
-	<!--
-    Window.Styles and Resources Section
-    Here, we define all the styles and resources (like colors and brushes) for the window.
-    This approach makes the UI consistent, easier to manage, and reduces code duplication.
-    It's much better than setting properties like Background, Width, Height, etc., on every single control.
-    -->
 	<Window.Styles>
 		<!-- Base style for all MaterialIcon controls -->
 		<Style Selector="materialIcons|MaterialIcon">
@@ -141,6 +136,23 @@
 		<Style Selector="TabItem:pointerover">
 			<Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
 		</Style>
+
+		<!-- Style for ListBoxItem to indicate selection -->
+		<Style Selector="ListBoxItem">
+			<Setter Property="Padding" Value="10" />
+			<Setter Property="Background" Value="Transparent" />
+			<Setter Property="Transitions">
+				<Transitions>
+					<BrushTransition Property="Background" Duration="0.1" />
+				</Transitions>
+			</Setter>
+		</Style>
+		<Style Selector="ListBoxItem:selected">
+			<Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+		</Style>
+		<Style Selector="ListBoxItem:pointerover">
+			<Setter Property="Background" Value="{DynamicResource ControlHoverBrush}" />
+		</Style>
 	</Window.Styles>
 
 	<Window.Resources>
@@ -172,73 +184,79 @@
 	<!-- The root Panel allows the PopupOverlay to sit on top of the main content -->
 	<Panel>
 		<!-- This Border now correctly handles the padding for the maximized window state -->
-		<Border Padding="{Binding #TheWindow.OffScreenMargin}">
-			<Grid Name="MainGrid" RowDefinitions="Auto,*,Auto" ColumnDefinitions="300,*">
+		<Border x:DataType="local:MainWindow" Padding="{Binding #TheWindow.OffScreenMargin}">
+			<Grid Name="MainGrid" RowDefinitions="Auto,*,Auto" ColumnDefinitions="Auto,*">
 
 				<!-- Top Bar / Title Bar -->
-				<Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Padding="10,0,0,0"
-                        Background="{DynamicResource PanelBackgroundBrush}" Name="TitleBar"
-                        PointerPressed="TitleBar_PointerPressed">
-					<Grid ColumnDefinitions="*,Auto">
-						<TextBlock Grid.Column="0" Text="Aurora Music Player" VerticalAlignment="Center" FontWeight="Bold" Margin="10,0,0,0"/>
+				<Grid Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Height="40" Background="{DynamicResource PanelBackgroundBrush}" Name="TitleBar" PointerPressed="TitleBar_PointerPressed" ColumnDefinitions="Auto,*,Auto">
+					<Button Name="HamburgerButton" Grid.Column="0" Classes="Transparent" Click="HamburgerButton_Click" Margin="5,0,0,0">
+						<materialIcons:MaterialIcon Kind="Menu" />
+					</Button>
+					<TextBlock Grid.Column="1" Text="Aurora Music Player" VerticalAlignment="Center" FontWeight="Bold" Margin="15,0,0,0" Foreground="{DynamicResource TextPrimaryBrush}" />
 
-						<!-- Right-aligned buttons -->
-						<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-							
+					<!-- Window Control Buttons -->
+					<StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+						<Button Name="MinimizeButton" Classes="WindowControl" Click="MinimizeButton_Click">
+							<materialIcons:MaterialIcon Kind="WindowMinimize" />
+						</Button>
+						<Button Name="MaximizeButton" Classes="WindowControl" Click="MaximizeButton_Click">
+							<materialIcons:MaterialIcon Kind="WindowMaximize" />
+						</Button>
+						<Button Name="CloseButton" Classes="WindowControl" Click="CloseButton_Click">
+							<materialIcons:MaterialIcon Kind="Close" />
+						</Button>
+					</StackPanel>
+				</Grid>
 
-							<!-- Window Control Buttons -->
-							<Button Name="MinimizeButton" Classes="WindowControl" Click="MinimizeButton_Click">
-								<materialIcons:MaterialIcon Kind="WindowMinimize" />
-							</Button>
-							<Button Name="MaximizeButton" Classes="WindowControl" Click="MaximizeButton_Click">
-								<materialIcons:MaterialIcon Kind="WindowMaximize" />
-							</Button>
-							<Button Name="CloseButton" Classes="WindowControl Close" Click="CloseButton_Click">
-								<materialIcons:MaterialIcon Kind="Close" />
-							</Button>
-						</StackPanel>
-					</Grid>
-				</Border>
-
-				<!-- Left Sidebar: Navigation -->
-                <Grid Grid.Row="1" Grid.Column="0" RowDefinitions="Auto,*" Margin="0,0,5,0">
-                    <ListBox Name="NavigationListBox" SelectionChanged="Navigation_SelectionChanged" Background="{DynamicResource ListBackgroundBrush}" BorderThickness="0">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="models:NavigationItem">
-                                <StackPanel Orientation="Horizontal" Spacing="10" Margin="10">
-                                    <materialIcons:MaterialIcon Kind="{Binding Icon}" Width="20" Height="20"/>
-                                    <TextBlock Text="{Binding Title}" FontSize="14" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </Grid>
-
-				<!-- Main Content Area: Used to swap between Album Art and Settings -->
-				<ContentControl Name="MainContentArea" Grid.Row="1" Grid.Column="1">
-					<Border Background="{DynamicResource ContentBackgroundBrush}" Padding="20">
-						<Image Name="AlbumArtImage" Stretch="Uniform" />
-					</Border>
-				</ContentControl>
+				<!-- SplitView for Navigation and Content -->
+				<SplitView Name="MainSplitView" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" DisplayMode="CompactInline" IsPaneOpen="True" PaneBackground="{DynamicResource ListBackgroundBrush}">
+					<SplitView.Pane>
+						<!-- Left Sidebar: Navigation -->
+						<Grid Margin="0,0,5,0">
+							<ListBox Name="NavigationListBox" SelectionChanged="Navigation_SelectionChanged" Background="Transparent" BorderThickness="0">
+								<ListBox.ItemTemplate>
+									<DataTemplate x:DataType="models:NavigationItem">
+										<StackPanel Orientation="Horizontal" Spacing="10" Margin="10">
+											<materialIcons:MaterialIcon Kind="{Binding Icon}" Width="20" Height="20" />
+											<TextBlock Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" />
+										</StackPanel>
+									</DataTemplate>
+								</ListBox.ItemTemplate>
+							</ListBox>
+						</Grid>
+					</SplitView.Pane>
+					<SplitView.Content>
+						<!-- Main Content Area -->
+						<ContentControl Name="MainContentArea" Background="{DynamicResource ContentBackgroundBrush}" Padding="20">
+							<!-- Initial content for tutorial-like UX -->
+							<StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsVisible="{Binding !IsMusicLoaded}">
+								<TextBlock Text="Welcome to Aurora Music Player!" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,10" />
+								<TextBlock Text="To get started, please add your music folders in the Settings." FontSize="16" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,20" />
+								<Button Content="Go to Settings" Click="SettingsButton_Click" Padding="20,10" />
+							</StackPanel>
+						</ContentControl>
+					</SplitView.Content>
+				</SplitView>
 
 				<!-- Bottom Bar: Playback Controls -->
-				<Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Padding="15" Background="{DynamicResource PanelBackgroundBrush}">
+				<Grid Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Background="{DynamicResource PanelBackgroundBrush}" Margin="0,0,0,10">
 					<Grid RowDefinitions="Auto,Auto">
 
 						<!-- Song Progress Bar -->
-						<Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
+						<Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="10,0,10,10">
 							<TextBlock Name="TimeLabel" Grid.Column="0" Text="00:00" Classes="Label" Margin="0,0,10,0" />
 							<Slider Name="SongProgressBar" Grid.Column="1" Minimum="0" Maximum="100" Value="0" />
 							<TextBlock Name="DurationLabel" Grid.Column="2" Text="00:00" Classes="Label" Margin="10,0,0,0" />
 						</Grid>
 
 						<!-- Playback Controls and Info -->
-						<Grid Grid.Row="1" ColumnDefinitions="*,Auto,*">
+						<Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="10,0,10,0">
 							<!-- Now Playing Info (Left Aligned) -->
-							<StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="10,0,0,0">
-								<TextBlock Name="NowPlayingInfoText" Text="-" FontSize="14" FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis" Classes="Label" />
-							</StackPanel>
+							<Grid Grid.Column="0" VerticalAlignment="Center" ColumnDefinitions="Auto,*">
+								<Image x:Name="AlbumArtImage" Grid.Column="0" Width="50" Height="50" Margin="0,0,10,0" Source="/Assets/avalonia-logo.ico" />
+								<TextBlock Name="NowPlayingInfoText" Grid.Column="1" Text="Select a song to play" FontSize="14" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" Classes="Label" VerticalAlignment="Center" />
+							</Grid>
 
 							<!-- Playback Buttons (Center Aligned) -->
 							<StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="15">
@@ -257,7 +275,7 @@
 							</StackPanel>
 
 							<!-- Volume and Repeat Controls (Right Aligned) -->
-							<StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="15" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,10,0">
+							<StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="15" VerticalAlignment="Center" HorizontalAlignment="Right">
 								<Button Name="RepeatButton" Click="RepeatButton_Click" Classes="Transparent">
 									<materialIcons:MaterialIcon Name="RepeatIcon" Kind="Repeat" />
 								</Button>
@@ -266,13 +284,14 @@
 							</StackPanel>
 						</Grid>
 					</Grid>
-				</Border>
+				</Grid>
 			</Grid>
 		</Border>
 
 		<!-- Popup Overlay sits on top of the Border and is not affected by its padding -->
+		<!-- Removed the UpdatePopupView from here, as it's now a Window -->
 		<Grid Name="PopupOverlay" IsVisible="False" Background="#88000000" ZIndex="100">
-			<modals:UpdatePopupView Name="UpdatePopup" HorizontalAlignment="Center" VerticalAlignment="Center" />
+			<!-- This grid will be used to show other popups if needed, but UpdatePopupView is now a separate Window -->
 		</Grid>
 	</Panel>
 </Window>

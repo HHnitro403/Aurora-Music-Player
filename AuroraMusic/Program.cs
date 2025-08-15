@@ -13,6 +13,8 @@ namespace AuroraMusic
         [STAThread]
         public static void Main(string[] args)
         {
+            AppServices.ConfigureServices();
+
             var logFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AuroraMusic", "logs", "log-.txt");
 
             Log.Logger = new LoggerConfiguration()

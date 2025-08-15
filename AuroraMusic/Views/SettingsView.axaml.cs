@@ -15,6 +15,37 @@ namespace AuroraMusic.Views;
 
 public partial class SettingsView : UserControl
 {
+    private AppSettings? _appSettings;
+    private readonly DatabaseService _dbService;
+
+    public event Action<bool>? FixedMenuSettingChanged;
+    public event Action<string>? FolderSelected;
+    public event Action? GoBackRequested;
+    public event Action? FolderRemoved;
+
+    public SettingsView()
+    {
+        InitializeComponent();
+        _dbService = new DatabaseService();
+        _ = LoadFoldersAsync();
+    }
+
+    public SettingsView(DatabaseService dbService) : this()
+    {
+        _dbService = dbService;
+        _ = LoadFoldersAsync();
+    }
+
+    public void SetAppSettings(AppSettings appSettings)
+    {
+        _appSettings = appSettings;
+        var fixedMenuToggle = this.FindControl<ToggleSwitch>("FixedMenuToggle");
+        if (fixedMenuToggle != null)
+        {
+            fixedMenuToggle.IsChecked = _appSettings.IsMenuFixed;
+        }
+    }
+
     private void ThemeToggle_Toggled(object? sender, RoutedEventArgs e)
     {
         if (Application.Current != null && sender is ToggleSwitch toggleSwitch)
@@ -23,19 +54,16 @@ public partial class SettingsView : UserControl
         }
     }
 
-    public event Action<string>? FolderSelected;
-
-    public event Action? GoBackRequested;
-
-    public event Action? FolderRemoved;
-
-    private readonly DatabaseService _dbService;
-
-    public SettingsView()
+    private async void FixedMenuToggle_Toggled(object? sender, RoutedEventArgs e)
     {
-        InitializeComponent();
-        _dbService = new DatabaseService();
-        _ = LoadFoldersAsync();
+        if (_appSettings == null || _dbService == null) return;
+
+        if (sender is ToggleSwitch toggleSwitch)
+        {
+            _appSettings.IsMenuFixed = toggleSwitch.IsChecked == true;
+            await _dbService.SaveSettingsAsync(_appSettings);
+            FixedMenuSettingChanged?.Invoke(_appSettings.IsMenuFixed);
+        }
     }
 
     private async Task LoadFoldersAsync()

@@ -13,11 +13,31 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace AuroraMusic
 {
-    public partial class MainWindow : Window
+    public partial class MainWindow : Window, INotifyPropertyChanged
     {
+        public new event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(field, value))
+            {
+                return false;
+            }
+            field = value;
+            OnPropertyChanged(propertyName);
+            return true;
+        }
+
         private const string AppVersion = "1.1.0";
 
         private readonly PlaybackService _playbackService;
@@ -31,11 +51,25 @@ namespace AuroraMusic
         private bool _isShuffleActive = false;
         private bool _isDraggingSlider = false;
 
+        private bool _isMusicLoaded = false;
+        public bool IsMusicLoaded
+        {
+            get => _isMusicLoaded;
+            set => SetProperty(ref _isMusicLoaded, value);
+        }
+
         private readonly SettingsView _settingsView;
         private readonly TracksView _tracksView;
         private readonly PlaylistsView _playlistView;
         private readonly AlbumView _albumView;
         private readonly ArtistView _artistView;
+
+        private bool _isPaneOpen = true;
+        public bool IsPaneOpen
+        {
+            get => _isPaneOpen;
+            set => SetProperty(ref _isPaneOpen, value);
+        }
 
         public MainWindow()
         {
@@ -48,20 +82,23 @@ namespace AuroraMusic
             _playbackService = new PlaybackService();
             _playlistManager = new PlaylistManager(_dbService);
 
-            _settingsView = new SettingsView();
+            // Instantiate views here
+            _settingsView = new SettingsView(_dbService);
             _tracksView = new TracksView(_playlistManager, _dbService);
             _playlistView = new PlaylistsView(_dbService, _playlistManager, this);
-            _albumView = new AlbumView();
-            _artistView = new ArtistView();
+            _albumView = new AlbumView(_dbService);
+            _artistView = new ArtistView(_dbService);
 
-            _tracksView.PlayRequested += PlayFile;
-            _playlistView.PlayRequested += PlayFile;
-
+            // Instantiate UI service here
             _uiService = new UIService(this, _tracksView);
 
+            // Subscribe to events here
+            _tracksView.PlayRequested += PlayFile;
+            _playlistView.PlayRequested += PlayFile;
             _settingsView.FolderSelected += OnFolderSelectedInSettings;
             _settingsView.GoBackRequested += _uiService.ShowMainContent;
             _settingsView.FolderRemoved += async () => await LoadAllMusicFilesAsync();
+            _settingsView.FixedMenuSettingChanged += (isFixed) => IsPaneOpen = isFixed;
 
             _playbackService.EndReached += OnEndReached;
             _playbackService.TimeChanged += OnTimeChanged;
@@ -81,7 +118,11 @@ namespace AuroraMusic
                 navigationListBox.SelectedIndex = 0;
             }
 
-            
+            var mainSplitView = this.FindControl<SplitView>("MainSplitView");
+            if (mainSplitView != null)
+            {
+                mainSplitView.Bind(SplitView.IsPaneOpenProperty, new Avalonia.Data.Binding("IsPaneOpen"));
+            }
 
             var songProgressBar = this.FindControl<Slider>("SongProgressBar");
             if (songProgressBar != null)
@@ -100,13 +141,27 @@ namespace AuroraMusic
             _ = InitializeApplicationAsync();
         }
 
+        private void HamburgerButton_Click(object? sender, RoutedEventArgs e)
+        {
+            IsPaneOpen = !IsPaneOpen;
+        }
+
         private async Task InitializeApplicationAsync()
         {
-            _uiService.ShowPopup("Initializing...", false);
-            _appSettings = await _dbService.InitializeDatabaseAsync(AppVersion);
-            _uiService.HidePopup();
+            (_appSettings, bool dbChangesApplied) = await _dbService.InitializeDatabaseAsync(AppVersion);
 
-            if (_appSettings != null && _appSettings.IsFirstLaunch)
+            // Pass AppSettings to views that need it after it's loaded
+            _settingsView.SetAppSettings(_appSettings);
+            _tracksView.SetAppSettings(_appSettings);
+
+            bool showInitializingPopup = dbChangesApplied || _appSettings.IsFirstLaunch;
+
+            if (showInitializingPopup)
+            {
+                _uiService.ShowPopup("Initializing...", false);
+            }
+
+            if (_appSettings.IsFirstLaunch)
             {
                 _appSettings.IsFirstLaunch = false;
                 await _dbService.SaveSettingsAsync(_appSettings);
@@ -115,7 +170,16 @@ namespace AuroraMusic
 
             ApplySettings();
             await LoadAllMusicFilesAsync();
+            IsMusicLoaded = (await _dbService.GetAllSongsAsync()).Any(); // Set IsMusicLoaded based on songs found
+
+            if (showInitializingPopup)
+            {
+                // Close the popup after initialization is complete
+                _uiService.ClosePopup();
+            }
         }
+
+        
 
         private void ApplySettings()
         {
@@ -138,6 +202,9 @@ namespace AuroraMusic
                 {
                     sortComboBox.SelectedIndex = (int)_currentSortMode;
                 }
+
+                // Apply IsMenuFixed setting
+                IsPaneOpen = _appSettings.IsMenuFixed;
             }
         }
 
@@ -155,11 +222,12 @@ namespace AuroraMusic
 
             if (_appSettings == null)
             {
-                _appSettings = await _dbService.InitializeDatabaseAsync(AppVersion);
+                (_appSettings, _) = await _dbService.InitializeDatabaseAsync(AppVersion);
             }
-            await _tracksView.LoadTracksAsync(_appSettings);
+            await _tracksView.LoadTracksAsync();
 
             if (nowPlayingInfoText != null) nowPlayingInfoText.Text = "Select a song to play";
+            IsMusicLoaded = (await _dbService.GetAllSongsAsync()).Any(); // Update IsMusicLoaded after loading
         }
 
         
@@ -170,8 +238,17 @@ namespace AuroraMusic
         {
             _playbackService.Play(item);
             UpdateNowPlaying(item);
+            _tracksView.SetSelectedItem(item);
             var playPauseIcon = this.FindControl<MaterialIcon>("PlayPauseIcon");
-            if (playPauseIcon != null) playPauseIcon.Kind = MaterialIconKind.Pause;
+            if (playPauseIcon != null)
+            {
+                playPauseIcon.Kind = MaterialIconKind.Pause;
+                Console.WriteLine("PlayPauseIcon found and updated.");
+            }
+            else
+            {
+                Console.WriteLine("PlayPauseIcon not found.");
+            }
         }
 
         private void UpdateNowPlaying(PlaylistItem? item)
@@ -182,6 +259,15 @@ namespace AuroraMusic
             {
                 nowPlayingInfoText.Text = $"{item.Artist} - {item.Title}";
                 albumArtImage.Source = item.AlbumArt;
+                Console.WriteLine($"Now Playing: {item.Artist} - {item.Title}");
+                Console.WriteLine($"Album Art Source: {item.AlbumArt}");
+            }
+            else
+            {
+                Console.WriteLine("UpdateNowPlaying: One or more UI elements or item is null.");
+                Console.WriteLine($"Item is null: {item == null}");
+                Console.WriteLine($"nowPlayingInfoText is null: {nowPlayingInfoText == null}");
+                Console.WriteLine($"albumArtImage is null: {albumArtImage == null}");
             }
         }
 
@@ -304,6 +390,11 @@ namespace AuroraMusic
                 {
                     songProgressBar.Value = e.Time;
                     timeLabel.Text = TimeSpan.FromMilliseconds(e.Time).ToString(@"mm\:ss");
+                    Console.WriteLine($"TimeChanged: {e.Time}");
+                }
+                else
+                {
+                    Console.WriteLine($"OnTimeChanged: songProgressBar or timeLabel not found. songProgressBar null: {songProgressBar == null}, timeLabel null: {timeLabel == null}");
                 }
             });
         }
@@ -318,6 +409,11 @@ namespace AuroraMusic
                 {
                     songProgressBar.Maximum = e.Length;
                     durationLabel.Text = TimeSpan.FromMilliseconds(e.Length).ToString(@"mm\:ss");
+                    Console.WriteLine($"LengthChanged: {e.Length}");
+                }
+                else
+                {
+                    Console.WriteLine($"OnLengthChanged: songProgressBar or durationLabel not found. songProgressBar null: {songProgressBar == null}, durationLabel null: {durationLabel == null}");
                 }
             });
         }
@@ -347,9 +443,11 @@ namespace AuroraMusic
                     break;
                 case 2: // Albums
                     _uiService.ShowView(_albumView);
+                    await _albumView.LoadAlbumsAsync();
                     break;
                 case 3: // Artists
                     _uiService.ShowView(_artistView);
+                    await _artistView.LoadArtistsAsync();
                     break;
                 case 4: // Settings
                     _uiService.ShowView(_settingsView);

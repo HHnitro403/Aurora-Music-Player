@@ -17,5 +17,6 @@ namespace AuroraMusic.Models
         public bool IsFirstLaunch { get; set; } = true;
         public string DatabaseVersion { get; set; } = "0.0.0";
         public int SortMode { get; set; } = (int)Models.SortMode.ArtistAlbum;
+        public bool IsMenuFixed { get; set; } = true;
     }
 }

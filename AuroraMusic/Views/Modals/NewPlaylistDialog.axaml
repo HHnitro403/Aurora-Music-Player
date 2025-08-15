@@ -1,0 +1,17 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" Width="300" Height="150"
+        x:Class="AuroraMusic.Views.Modals.NewPlaylistDialog"
+        Title="New Playlist"
+        CornerRadius="10">
+    <StackPanel Spacing="10" Margin="10">
+        <TextBlock Text="Enter Playlist Name:"/>
+        <TextBox Name="PlaylistNameTextBox"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+            <Button Content="Create" Name="CreateButton"/>
+            <Button Content="Cancel" Name="CancelButton"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

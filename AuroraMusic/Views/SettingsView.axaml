@@ -41,6 +41,11 @@
 				<ToggleSwitch Name="ThemeToggle" IsCheckedChanged="ThemeToggle_Toggled" />
 			</StackPanel>
 
+			<StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+				<TextBlock Text="Fixed Menu" VerticalAlignment="Center" />
+				<ToggleSwitch Name="FixedMenuToggle" IsCheckedChanged="FixedMenuToggle_Toggled" />
+			</StackPanel>
+
 			<Button Name="BackButton" Click="BackButton_Click"
                     Content="Back to Player"
                     Classes="accent"

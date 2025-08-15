@@ -9,5 +9,13 @@
 		<FluentTheme />
 
 		<materialIcons:MaterialIconStyles />
+
+		<!-- Global Styles for Rounded Corners -->
+		<Style Selector="Button, TextBox, ListBox, Slider">
+			<Setter Property="CornerRadius" Value="10" />
+		</Style>
+		<Style Selector="Window">
+			<Setter Property="CornerRadius" Value="10" />
+		</Style>
 	</Application.Styles>
 </Application>

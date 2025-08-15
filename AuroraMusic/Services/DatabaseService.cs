@@ -21,14 +21,25 @@ namespace AuroraMusic.Services
         /// </summary>
         /// <param name="appVersion">The current version of the application.</param>
         /// <returns>The application settings, either loaded or newly created.</returns>
-        public async Task<AppSettings> InitializeDatabaseAsync(string appVersion)
+        public async Task<(AppSettings settings, bool changesApplied)> InitializeDatabaseAsync(string appVersion)
         {
             using var context = GetContext();
+            bool changesApplied = false;
 
-            // Step 1: Ensure the database file and schema are created.
-            // This is safe to call every time. It will create the DB if it doesn't exist,
-            // and apply any pending migrations if it does. This fixes the "no such table" error.
-            await context.Database.MigrateAsync();
+            // Step 1: Ensure the database file and schema are created and migrations applied.
+            // This will create the DB if it doesn't exist, and apply any pending migrations.
+            // We can't directly check if migrations were applied, so we'll assume if the DB was just created or version updated, it counts.
+            var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+            if (pendingMigrations.Any())
+            {
+                await context.Database.MigrateAsync();
+                changesApplied = true;
+            }
+            else
+            {
+                // Ensure database is created even if no pending migrations (e.g., first run with no migrations yet)
+                await context.Database.EnsureCreatedAsync();
+            }
 
             // Step 2: Get the current settings. If they don't exist, create them.
             var settings = await context.Settings.FirstOrDefaultAsync(s => s.Id == 1);
@@ -36,17 +47,22 @@ namespace AuroraMusic.Services
             {
                 settings = new AppSettings();
                 context.Settings.Add(settings);
+                changesApplied = true; // New settings created
             }
 
             // Step 3: Check if the database version needs to be updated.
-            if (new System.Version(settings.DatabaseVersion) < new System.Version(appVersion))
+            if (settings.DatabaseVersion == null || new System.Version(settings.DatabaseVersion) < new System.Version(appVersion))
             {
                 settings.DatabaseVersion = appVersion;
+                changesApplied = true; // Database version updated
             }
 
             // Step 4: Save any changes (like creating the initial settings or updating the version).
-            await context.SaveChangesAsync();
-            return settings;
+            if (changesApplied)
+            {
+                await context.SaveChangesAsync();
+            }
+            return (settings, changesApplied);
         }
 
         /// <summary>
@@ -192,13 +208,14 @@ namespace AuroraMusic.Services
             return album;
         }
 
+        #pragma warning disable CS8602 // Desreferência de uma referência possivelmente nula.
         public async Task<Song> GetOrCreateSongAsync(string title, string filePath, int artistId, int albumId, TimeSpan duration)
         {
             using var context = GetContext();
             var song = await context.Songs
                 .Include(s => s.Album)
                     .ThenInclude(a => a.Artist) // Eagerly load Artist within Album
-                .Include(s => s.Artist) // Eagerly load the Song's direct Artist
+                                .Include(s => s.Artist!) // Eagerly load the Song's direct Artist
                 .FirstOrDefaultAsync(s => s.FilePath == filePath);
             if (song == null)
             {
@@ -214,6 +231,30 @@ namespace AuroraMusic.Services
                 await context.SaveChangesAsync();
             }
             return song;
+        }
+#pragma warning restore CS8602 // Desreferência de uma referência possivelmente nula.
+
+        public async Task<IEnumerable<Song>> GetAllSongsAsync()
+        {
+            using var context = GetContext();
+            return await context.Songs.Include(s => s.Artist).ToListAsync();
+        }
+
+        public async Task<List<Album>> GetAlbumsAsync()
+        {
+            using var context = GetContext();
+            return await context.Albums
+                .Include(a => a.Artist)
+                .Where(a => a.Songs.Any())
+                .ToListAsync();
+        }
+
+        public async Task<List<Artist>> GetArtistsAsync()
+        {
+            using var context = GetContext();
+            return await context.Artists
+                .Where(a => a.Songs.Any())
+                .ToListAsync();
         }
     }
 }

@@ -7,6 +7,8 @@ using Avalonia.Interactivity;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using MsBox.Avalonia;
+using MsBox.Avalonia.Enums;
 
 namespace AuroraMusic.Views
 {
@@ -40,6 +42,8 @@ namespace AuroraMusic.Views
             _playlistsListBox!.SelectionChanged += PlaylistsListBox_SelectionChanged;
             _playlistSongsListBox!.DoubleTapped += PlaylistSongsListBox_DoubleTapped;
             this.FindControl<Button>("NewPlaylistButton")!.Click += NewPlaylistButton_Click;
+            this.FindControl<Button>("RenamePlaylistButton")!.Click += RenamePlaylistButton_Click;
+            this.FindControl<Button>("DeletePlaylistButton")!.Click += DeletePlaylistButton_Click;
             this.FindControl<Button>("AddSongButton")!.Click += AddSongButton_Click;
             this.FindControl<Button>("RemoveSongButton")!.Click += RemoveSongButton_Click;
         }
@@ -57,24 +61,34 @@ namespace AuroraMusic.Views
 
         private async void NewPlaylistButton_Click(object? sender, RoutedEventArgs e)
         {
-            if (_dbService == null) return;
-            // For simplicity, prompt for name directly. In a real app, use a dialog.
-            var newPlaylistName = await GetUserInput("Enter new playlist name:");
-            
+            if (_dbService == null || _parentWindow == null) return;
+
+            var newPlaylistName = await NewPlaylistDialog.Show(_parentWindow);
+
             if (!string.IsNullOrWhiteSpace(newPlaylistName))
             {
                 var newPlaylist = new Playlist { Name = newPlaylistName };
                 await _dbService.AddPlaylistAsync(newPlaylist);
                 await LoadPlaylistsAsync(); // Reload playlists to show the new one
+
+                var box = MessageBoxManager.GetMessageBoxStandard("Success", $"Playlist '{newPlaylistName}' created successfully.", ButtonEnum.Ok);
+                await box.ShowAsync();
             }
         }
 
-        private void PlaylistsListBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        private async void PlaylistsListBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
         {
             if (_playlistsListBox!.SelectedItem is Playlist selectedPlaylist)
             {
                 _playlistNameTextBlock!.Text = selectedPlaylist.Name;
-                _playlistSongsListBox!.ItemsSource = selectedPlaylist.PlaylistItems;
+                if (_dbService != null)
+                {
+                    var playlist = await _dbService.GetPlaylistByIdAsync(selectedPlaylist.Id);
+                    if (playlist != null)
+                    {
+                        _playlistSongsListBox!.ItemsSource = playlist.PlaylistItems;
+                    }
+                }
             }
             else
             {
@@ -93,14 +107,18 @@ namespace AuroraMusic.Views
 
         private async void AddSongButton_Click(object? sender, RoutedEventArgs e)
         {
-            if (_dbService == null || _playlistsListBox == null) return;
+            if (_dbService == null || _playlistsListBox == null || _parentWindow == null) return;
             if (_playlistsListBox.SelectedItem is Playlist selectedPlaylist)
             {
-                // In a real app, this would open a song selection dialog
-                var songIdInput = await GetUserInput("Enter Song ID to add:");
-                if (int.TryParse(songIdInput, out int songId))
+                var allSongs = await _dbService.GetAllSongsAsync();
+                var selectedSongs = await AddSongToPlaylistDialog.Show(_parentWindow, allSongs);
+
+                if (selectedSongs != null)
                 {
-                    await _dbService.AddSongToPlaylistAsync(selectedPlaylist.Id, songId);
+                    foreach (var song in selectedSongs)
+                    {
+                        await _dbService.AddSongToPlaylistAsync(selectedPlaylist.Id, song.Id);
+                    }
                     await LoadPlaylistsAsync(); // Reload to update the current playlist view
                 }
             }
@@ -116,10 +134,41 @@ namespace AuroraMusic.Views
             }
         }
 
-        // Helper to get user input using the custom InputDialog
-        private async Task<string?> GetUserInput(string prompt)
+        private async void RenamePlaylistButton_Click(object? sender, RoutedEventArgs e)
         {
-            return await InputDialog.Show(_parentWindow!, prompt);
+            if (_dbService == null || _playlistsListBox == null || _parentWindow == null) return;
+            if (_playlistsListBox.SelectedItem is Playlist selectedPlaylist)
+            {
+                var newPlaylistName = await NewPlaylistDialog.Show(_parentWindow);
+
+                if (!string.IsNullOrWhiteSpace(newPlaylistName))
+                {
+                    selectedPlaylist.Name = newPlaylistName;
+                    await _dbService.UpdatePlaylistAsync(selectedPlaylist);
+                    await LoadPlaylistsAsync();
+
+                    var box = MessageBoxManager.GetMessageBoxStandard("Success", $"Playlist renamed to '{newPlaylistName}' successfully.", ButtonEnum.Ok);
+                    await box.ShowAsync();
+                }
+            }
+        }
+
+        private async void DeletePlaylistButton_Click(object? sender, RoutedEventArgs e)
+        {
+            if (_dbService == null || _playlistsListBox == null || _parentWindow == null) return;
+            if (_playlistsListBox.SelectedItem is Playlist selectedPlaylist)
+            {
+                var result = await ConfirmationDialog.Show(_parentWindow, $"Are you sure you want to delete the playlist '{selectedPlaylist.Name}'?");
+
+                if (result)
+                {
+                    await _dbService.DeletePlaylistAsync(selectedPlaylist.Id);
+                    await LoadPlaylistsAsync();
+
+                    var box = MessageBoxManager.GetMessageBoxStandard("Success", $"Playlist '{selectedPlaylist.Name}' deleted successfully.", ButtonEnum.Ok);
+                    await box.ShowAsync();
+                }
+            }
         }
     }
 }

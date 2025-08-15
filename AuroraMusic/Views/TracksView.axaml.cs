@@ -39,7 +39,7 @@ namespace AuroraMusic.Views
             if (sortComboBox != null)
             {
                 sortComboBox.ItemsSource = Enum.GetValues(typeof(SortMode));
-                sortComboBox.SelectedIndex = (int)_currentSortMode;
+                // Do not set SelectedIndex here, it will be set by SetAppSettings
                 sortComboBox.SelectionChanged += SortComboBox_SelectionChanged;
             }
 
@@ -50,10 +50,20 @@ namespace AuroraMusic.Views
             }
         }
 
-        public async Task LoadTracksAsync(AppSettings appSettings)
+        public void SetAppSettings(AppSettings appSettings)
         {
             _appSettings = appSettings;
-            if (_dbService == null || _playlistManager == null) return;
+            var sortComboBox = this.FindControl<ComboBox>("SortComboBox");
+            if (sortComboBox != null && _appSettings != null)
+            {
+                _currentSortMode = (SortMode)_appSettings.SortMode;
+                sortComboBox.SelectedIndex = (int)_currentSortMode;
+            }
+        }
+
+        public async Task LoadTracksAsync()
+        {
+            if (_appSettings == null || _dbService == null || _playlistManager == null) return;
             var folders = await _dbService.GetAllFoldersAsync();
             await _playlistManager.LoadMusicFilesAsync(folders);
             SortAndDisplayPlaylist();
@@ -115,6 +125,16 @@ namespace AuroraMusic.Views
             if (playlistListBox != null)
             {
                 playlistListBox.ItemsSource = items.ToList();
+            }
+        }
+
+        public void SetSelectedItem(PlaylistItem item)
+        {
+            var playlistListBox = this.FindControl<ListBox>("PlaylistListBox");
+            if (playlistListBox != null)
+            {
+                playlistListBox.SelectedItem = item;
+                playlistListBox.ScrollIntoView(item);
             }
         }
     }

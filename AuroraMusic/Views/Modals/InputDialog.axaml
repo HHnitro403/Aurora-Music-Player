@@ -2,12 +2,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="150"
+        mc:Ignorable="d" Width="400" Height="150"
         x:Class="AuroraMusic.Views.Modals.InputDialog"
         Title="Input Dialog"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
-        SizeToContent="WidthAndHeight">
+        SizeToContent="WidthAndHeight"
+        CornerRadius="10"> <!-- Added CornerRadius -->
     <Grid RowDefinitions="Auto,Auto,Auto" Margin="15">
         <TextBlock Name="PromptTextBlock" Grid.Row="0" Margin="0,0,0,10" TextWrapping="Wrap"/>
         <TextBox Name="InputTextBox" Grid.Row="1" Margin="0,0,0,15"/>

@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="using:AuroraMusic.Models"
+        mc:Ignorable="d" Width="400" Height="600"
+        x:Class="AuroraMusic.Views.Modals.AddSongToPlaylistDialog"
+        Title="Add Songs to Playlist">
+    <Grid RowDefinitions="*,Auto">
+        <ListBox Name="SongsListBox" Grid.Row="0" Margin="5" SelectionMode="Multiple">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="models:Song">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                        <TextBlock Text=" - " VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding Artist.Name}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="10">
+            <Button Content="Add" Name="AddButton" Margin="0,0,10,0"/>
+            <Button Content="Cancel" Name="CancelButton"/>
+        </StackPanel>
+    </Grid>
+</Window>

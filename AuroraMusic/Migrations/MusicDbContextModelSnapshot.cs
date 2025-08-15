@@ -40,7 +40,7 @@ namespace AuroraMusic.Migrations
                     b.HasIndex("Title", "ArtistId")
                         .IsUnique();
 
-                    b.ToTable("Albums");
+                    b.ToTable("Albums", (string)null);
                 });
 
             modelBuilder.Entity("AuroraMusic.Models.AppSettings", b =>
@@ -67,7 +67,7 @@ namespace AuroraMusic.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Settings");
+                    b.ToTable("Settings", (string)null);
                 });
 
             modelBuilder.Entity("AuroraMusic.Models.Artist", b =>
@@ -85,7 +85,7 @@ namespace AuroraMusic.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Artists");
+                    b.ToTable("Artists", (string)null);
                 });
 
             modelBuilder.Entity("AuroraMusic.Models.Folder", b =>
@@ -99,7 +99,7 @@ namespace AuroraMusic.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Folders");
+                    b.ToTable("Folders", (string)null);
                 });
 
             modelBuilder.Entity("AuroraMusic.Models.Playlist", b =>
@@ -114,7 +114,7 @@ namespace AuroraMusic.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Playlists");
+                    b.ToTable("Playlists", (string)null);
                 });
 
             modelBuilder.Entity("AuroraMusic.Models.PlaylistItem", b =>
@@ -135,7 +135,7 @@ namespace AuroraMusic.Migrations
 
                     b.HasIndex("SongId");
 
-                    b.ToTable("PlaylistItems");
+                    b.ToTable("PlaylistItems", (string)null);
                 });
 
             modelBuilder.Entity("AuroraMusic.Models.Song", b =>
@@ -173,7 +173,7 @@ namespace AuroraMusic.Migrations
                     b.HasIndex("FilePath")
                         .IsUnique();
 
-                    b.ToTable("Songs");
+                    b.ToTable("Songs", (string)null);
                 });
 
             modelBuilder.Entity("AuroraMusic.Models.Album", b =>
