@@ -143,7 +143,10 @@ namespace AuroraMusic
 
         private void HamburgerButton_Click(object? sender, RoutedEventArgs e)
         {
-            IsPaneOpen = !IsPaneOpen;
+            if (_appSettings != null && !_appSettings.IsMenuFixed)
+            {
+                IsPaneOpen = !IsPaneOpen;
+            }
         }
 
         private async Task InitializeApplicationAsync()
