@@ -37,14 +37,14 @@ public partial class SettingsView : UserControl
     }
 
     public void SetAppSettings(AppSettings appSettings)
-    {
-        _appSettings = appSettings;
-        var fixedMenuToggle = this.FindControl<ToggleSwitch>("FixedMenuToggle");
-        if (fixedMenuToggle != null)
         {
-            fixedMenuToggle.IsChecked = _appSettings.IsMenuFixed;
+            _appSettings = appSettings;
+            var fixedMenuToggle = this.FindControl<ToggleSwitch>("FixedMenuToggle");
+            if (fixedMenuToggle != null)
+            {
+                fixedMenuToggle.IsChecked = _appSettings.IsPaneFixed;
+            }
         }
-    }
 
     private void ThemeToggle_Toggled(object? sender, RoutedEventArgs e)
     {
@@ -55,16 +55,16 @@ public partial class SettingsView : UserControl
     }
 
     private async void FixedMenuToggle_Toggled(object? sender, RoutedEventArgs e)
-    {
-        if (_appSettings == null || _dbService == null) return;
-
-        if (sender is ToggleSwitch toggleSwitch)
         {
-            _appSettings.IsMenuFixed = toggleSwitch.IsChecked == true;
-            await _dbService.SaveSettingsAsync(_appSettings);
-            FixedMenuSettingChanged?.Invoke(_appSettings.IsMenuFixed);
+            if (_appSettings == null || _dbService == null) return;
+
+            if (sender is ToggleSwitch toggleSwitch)
+            {
+                _appSettings.IsPaneFixed = toggleSwitch.IsChecked == true;
+                await _dbService.SaveSettingsAsync(_appSettings);
+                FixedMenuSettingChanged?.Invoke(_appSettings.IsPaneFixed);
+            }
         }
-    }
 
     private async Task LoadFoldersAsync()
     {

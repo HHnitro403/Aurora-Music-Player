@@ -18,7 +18,8 @@
         WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="NoChrome"
-        ExtendClientAreaTitleBarHeightHint="-1">
+        ExtendClientAreaTitleBarHeightHint="-1"
+        Loaded="MainWindow_Loaded">
 
 	<Window.Styles>
 		<!-- Base style for all MaterialIcon controls -->
@@ -209,7 +210,7 @@
 				</Grid>
 
 				<!-- SplitView for Navigation and Content -->
-				<SplitView Name="MainSplitView" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" DisplayMode="CompactInline" IsPaneOpen="True" PaneBackground="{DynamicResource ListBackgroundBrush}">
+				<SplitView Name="MainSplitView" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" DisplayMode="Overlay" IsPaneOpen="{Binding IsPaneOpen, Mode=TwoWay}" PaneBackground="{DynamicResource ListBackgroundBrush}">
 					<SplitView.Pane>
 						<!-- Left Sidebar: Navigation -->
 						<Grid Margin="0,0,5,0">
@@ -250,9 +251,10 @@
 						</Grid>
 
 						<!-- Playback Controls and Info -->
-						<Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="10,0,10,0">
+						<Grid Grid.Row="1" ColumnDefinitions="1*,Auto,1*" Margin="10,0,10,0">
 							<!-- Now Playing Info (Left Aligned) -->
-							<Grid Grid.Column="0" VerticalAlignment="Center" ColumnDefinitions="Auto,*">
+							<Grid Grid.Column="0" VerticalAlignment="Center" ColumnDefinitions="Auto,*
+                                  ">
 								<Image x:Name="AlbumArtImage" Grid.Column="0" Width="50" Height="50" Margin="0,0,10,0" Source="/Assets/avalonia-logo.ico" />
 								<TextBlock Name="NowPlayingInfoText" Grid.Column="1" Text="Select a song to play" FontSize="14" FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis" Classes="Label" VerticalAlignment="Center" />
@@ -290,7 +292,7 @@
 
 		<!-- Popup Overlay sits on top of the Border and is not affected by its padding -->
 		<!-- Removed the UpdatePopupView from here, as it's now a Window -->
-		<Grid Name="PopupOverlay" IsVisible="False" Background="#88000000" ZIndex="100">
+		<Grid Name="PopupOverlay" IsVisible="false" Background="#88000000" ZIndex="100">
 			<!-- This grid will be used to show other popups if needed, but UpdatePopupView is now a separate Window -->
 		</Grid>
 	</Panel>

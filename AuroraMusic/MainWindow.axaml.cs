@@ -40,10 +40,10 @@ namespace AuroraMusic
 
         private const string AppVersion = "1.1.0";
 
-        private readonly PlaybackService _playbackService;
-        private readonly PlaylistManager _playlistManager;
-        private readonly UIService _uiService;
-        private readonly DatabaseService _dbService;
+        private PlaybackService _playbackService;
+        private PlaylistManager _playlistManager;
+        private UIService _uiService;
+        private DatabaseService _dbService;
 
         private AppSettings? _appSettings;
         private RepeatMode _currentRepeatMode = RepeatMode.None;
@@ -52,32 +52,40 @@ namespace AuroraMusic
         private bool _isDraggingSlider = false;
 
         private bool _isMusicLoaded = false;
+
         public bool IsMusicLoaded
         {
             get => _isMusicLoaded;
             set => SetProperty(ref _isMusicLoaded, value);
         }
 
-        private readonly SettingsView _settingsView;
-        private readonly TracksView _tracksView;
-        private readonly PlaylistsView _playlistView;
-        private readonly AlbumView _albumView;
-        private readonly ArtistView _artistView;
+        private SettingsView _settingsView;
+        private TracksView _tracksView;
+        private PlaylistsView _playlistView;
+        private AlbumView _albumView;
+        private ArtistView _artistView;
 
-        private bool _isPaneOpen = true;
         public bool IsPaneOpen
         {
-            get => _isPaneOpen;
-            set => SetProperty(ref _isPaneOpen, value);
+            get => _appSettings?.IsPaneOpen ?? false;
+            set
+            {
+                if (_appSettings != null && _appSettings.IsPaneOpen != value)
+                {
+                    _appSettings.IsPaneOpen = value;
+                    OnPropertyChanged();
+                    _dbService.SaveSettingsAsync(_appSettings);
+                }
+            }
         }
 
         public MainWindow()
         {
             InitializeComponent();
-            this.KeyDown += MainWindow_KeyDown;
-            this.ExtendClientAreaToDecorationsHint = true;
-            this.ExtendClientAreaTitleBarHeightHint = -1;
+        }
 
+        private async void MainWindow_Loaded(object? sender, RoutedEventArgs e)
+        {
             _dbService = new DatabaseService();
             _playbackService = new PlaybackService();
             _playlistManager = new PlaylistManager(_dbService);
@@ -92,13 +100,17 @@ namespace AuroraMusic
             // Instantiate UI service here
             _uiService = new UIService(this, _tracksView);
 
+            this.KeyDown += MainWindow_KeyDown;
+            this.ExtendClientAreaToDecorationsHint = true;
+            this.ExtendClientAreaTitleBarHeightHint = -1;
+
             // Subscribe to events here
             _tracksView.PlayRequested += PlayFile;
             _playlistView.PlayRequested += PlayFile;
             _settingsView.FolderSelected += OnFolderSelectedInSettings;
             _settingsView.GoBackRequested += _uiService.ShowMainContent;
             _settingsView.FolderRemoved += async () => await LoadAllMusicFilesAsync();
-            _settingsView.FixedMenuSettingChanged += (isFixed) => IsPaneOpen = isFixed;
+            _settingsView.FixedMenuSettingChanged += UpdatePaneState;
 
             _playbackService.EndReached += OnEndReached;
             _playbackService.TimeChanged += OnTimeChanged;
@@ -138,12 +150,33 @@ namespace AuroraMusic
                 }, RoutingStrategies.Tunnel, true);
             }
 
-            _ = InitializeApplicationAsync();
+            await InitializeApplicationAsync();
+        }
+
+        private void UpdatePaneState(bool isFixed)
+        {
+            var mainSplitView = this.FindControl<SplitView>("MainSplitView");
+            var hamburgerButton = this.FindControl<Button>("HamburgerButton");
+            if (mainSplitView == null || hamburgerButton == null) return;
+
+            _appSettings.IsPaneFixed = isFixed;
+
+            if (isFixed)
+            {
+                mainSplitView.DisplayMode = SplitViewDisplayMode.CompactInline;
+                IsPaneOpen = true; // This will use the property setter to open the pane and save the state.
+            }
+            else
+            {
+                mainSplitView.DisplayMode = SplitViewDisplayMode.Overlay;
+                // The pane's open/closed state is already preserved in IsPaneOpen, so no action is needed.
+            }
+            hamburgerButton.IsVisible = !isFixed;
         }
 
         private void HamburgerButton_Click(object? sender, RoutedEventArgs e)
         {
-            if (_appSettings != null && !_appSettings.IsMenuFixed)
+            if (_appSettings != null && !_appSettings.IsPaneFixed)
             {
                 IsPaneOpen = !IsPaneOpen;
             }
@@ -182,8 +215,6 @@ namespace AuroraMusic
             }
         }
 
-        
-
         private void ApplySettings()
         {
             var volumeSlider = this.FindControl<Slider>("VolumeSlider");
@@ -206,8 +237,9 @@ namespace AuroraMusic
                     sortComboBox.SelectedIndex = (int)_currentSortMode;
                 }
 
-                // Apply IsMenuFixed setting
-                IsPaneOpen = _appSettings.IsMenuFixed;
+                // Apply pane settings
+                UpdatePaneState(_appSettings.IsPaneFixed);
+                OnPropertyChanged(nameof(IsPaneOpen)); // Notify the UI of the initial state
             }
         }
 
@@ -232,10 +264,6 @@ namespace AuroraMusic
             if (nowPlayingInfoText != null) nowPlayingInfoText.Text = "Select a song to play";
             IsMusicLoaded = (await _dbService.GetAllSongsAsync()).Any(); // Update IsMusicLoaded after loading
         }
-
-        
-
-        
 
         private void PlayFile(PlaylistItem item)
         {
@@ -310,8 +338,7 @@ namespace AuroraMusic
             var shuffleIcon = this.FindControl<MaterialIcon>("ShuffleIcon");
             if (shuffleIcon != null) shuffleIcon.Foreground = _isShuffleActive ? new SolidColorBrush(Color.FromRgb(0, 191, 255)) : Brushes.White;
 
-            var shuffledPlaylist = _playlistManager.ToggleShuffle(_isShuffleActive);
-            // _tracksView.UpdatePlaylistDisplay(shuffledPlaylist); // Moved to TracksView
+            _playlistManager.ToggleShuffle(_isShuffleActive, _currentSortMode);
         }
 
         private async void RepeatButton_Click(object? sender, RoutedEventArgs e)
@@ -332,17 +359,19 @@ namespace AuroraMusic
 
             switch (_currentRepeatMode)
             {
-                case RepeatMode.None: 
-                    repeatIcon.Kind = MaterialIconKind.Repeat; 
-                    repeatIcon.Foreground = Brushes.White; 
-                    break;
-                case RepeatMode.RepeatPlaylist: 
+                case RepeatMode.None:
                     repeatIcon.Kind = MaterialIconKind.Repeat;
-                    repeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255)); 
+                    repeatIcon.Foreground = Brushes.White;
                     break;
-                case RepeatMode.RepeatTrack: 
-                    repeatIcon.Kind = MaterialIconKind.RepeatOnce; 
-                    repeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255)); 
+
+                case RepeatMode.RepeatPlaylist:
+                    repeatIcon.Kind = MaterialIconKind.Repeat;
+                    repeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255));
+                    break;
+
+                case RepeatMode.RepeatTrack:
+                    repeatIcon.Kind = MaterialIconKind.RepeatOnce;
+                    repeatIcon.Foreground = new SolidColorBrush(Color.FromRgb(0, 191, 255));
                     break;
             }
         }
@@ -377,10 +406,6 @@ namespace AuroraMusic
                 await _dbService.SaveSettingsAsync(_appSettings);
             }
         }
-
-        
-
-        
 
         private void OnTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
         {
@@ -428,7 +453,7 @@ namespace AuroraMusic
         private void CloseButton_Click(object? sender, RoutedEventArgs e) => Close();
 
         private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e) => BeginMoveDrag(e);
-        
+
         private void SettingsButton_Click(object? sender, RoutedEventArgs e) => _uiService.ShowView(_settingsView);
 
         private async void Navigation_SelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -440,18 +465,22 @@ namespace AuroraMusic
                 case 0: // Tracks
                     _uiService.ShowView(_tracksView);
                     break;
+
                 case 1: // Playlists
                     _uiService.ShowView(_playlistView);
                     await _playlistView.LoadPlaylistsAsync();
                     break;
+
                 case 2: // Albums
                     _uiService.ShowView(_albumView);
                     await _albumView.LoadAlbumsAsync();
                     break;
+
                 case 3: // Artists
                     _uiService.ShowView(_artistView);
                     await _artistView.LoadArtistsAsync();
                     break;
+
                 case 4: // Settings
                     _uiService.ShowView(_settingsView);
                     break;
@@ -465,9 +494,11 @@ namespace AuroraMusic
                 case Key.MediaPlayPause:
                     PlayPauseButton_Click(this, new RoutedEventArgs());
                     break;
+
                 case Key.MediaNextTrack:
                     NextButton_Click(this, new RoutedEventArgs());
                     break;
+
                 case Key.MediaPreviousTrack:
                     PreviousButton_Click(this, new RoutedEventArgs());
                     break;

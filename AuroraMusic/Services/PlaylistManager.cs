@@ -135,16 +135,26 @@ namespace AuroraMusic.Services
             return _currentQueue[_currentQueueIndex];
         }
 
-        public IEnumerable<PlaylistItem> ToggleShuffle(bool active)
+        public void ToggleShuffle(bool active, SortMode sortMode)
         {
             _isShuffleActive = active;
+            if (_currentQueue.Count <= 1) return;
+
+            var currentItem = _currentQueue[_currentQueueIndex];
+
             if (_isShuffleActive)
             {
-                return _currentQueue.OrderBy(x => _random.Next());
+                // Shuffle the list
+                var shuffled = _currentQueue.OrderBy(x => _random.Next()).ToList();
+                _currentQueue = shuffled;
+                _currentQueueIndex = _currentQueue.IndexOf(currentItem);
             }
             else
             {
-                return GetSortedPlaylist(SortMode.ArtistAlbum); // Or whatever the default sort is
+                // Unshuffle (sort) the list
+                var sorted = GetSortedPlaylist(sortMode).ToList();
+                _currentQueue = sorted;
+                _currentQueueIndex = _currentQueue.IndexOf(currentItem);
             }
         }
     }
