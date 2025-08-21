@@ -8,6 +8,7 @@
         xmlns:local="using:AuroraMusic"
         Design.DesignWidth="900" Design.DesignHeight="650"
         x:Class="AuroraMusic.MainWindow"
+		x:DataType="local:MainWindow"
         x:Name="TheWindow"
         Icon="/Assets/avalonia-logo.ico"
         Title="Aurora Music Player"
@@ -166,7 +167,7 @@
 		<Color x:Key="HoverControlColor">#55555555</Color>
 		<Color x:Key="BorderControlColor">#AAFFFFFF</Color>
 		<Color x:Key="PanelBackgroundColor">#88111111</Color>
-		<Color x:Key="ListBackgroundColor">#661C1C1C</Color>
+		<Color x:Key="ListBackgroundColor">#851C1C1C</Color>
 		<Color x:Key="ContentBackgroundColor">#44000000</Color>
 
 		<!-- Brushes using the color palette -->
@@ -210,7 +211,7 @@
 				</Grid>
 
 				<!-- SplitView for Navigation and Content -->
-				<SplitView Name="MainSplitView" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" DisplayMode="Overlay" IsPaneOpen="{Binding IsPaneOpen, Mode=TwoWay}" PaneBackground="{DynamicResource ListBackgroundBrush}">
+				<SplitView Name="MainSplitView" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" DisplayMode="Overlay" IsPaneOpen="{Binding IsPaneOpen, Mode=TwoWay}" PaneBackground="{DynamicResource AcrylicInAppFillColorDefaultBrush}">
 					<SplitView.Pane>
 						<!-- Left Sidebar: Navigation -->
 						<Grid Margin="0,0,5,0">
@@ -228,14 +229,20 @@
 					</SplitView.Pane>
 					<SplitView.Content>
 						<!-- Main Content Area -->
-						<ContentControl Name="MainContentArea" Background="{DynamicResource ContentBackgroundBrush}" Padding="20">
-							<!-- Initial content for tutorial-like UX -->
-							<StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsVisible="{Binding !IsMusicLoaded}">
-								<TextBlock Text="Welcome to Aurora Music Player!" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,10" />
-								<TextBlock Text="To get started, please add your music folders in the Settings." FontSize="16" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,20" />
-								<Button Content="Go to Settings" Click="SettingsButton_Click" Padding="20,10" />
-							</StackPanel>
-						</ContentControl>
+						<Grid>
+							<ContentControl Name="MainContentArea" Background="{DynamicResource ContentBackgroundBrush}" Padding="20">
+								<!-- Initial content for tutorial-like UX -->
+								<StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" IsVisible="{Binding !IsMusicLoaded}">
+									<TextBlock Text="Welcome to Aurora Music Player!" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,10" />
+									<TextBlock Text="To get started, please add your music folders in the Settings." FontSize="16" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,20" />
+									<Button Content="Go to Settings" Click="SettingsButton_Click" Padding="20,10" />
+								</StackPanel>
+							</ContentControl>
+
+							<Border Background="#80000000"
+									IsVisible="{Binding IsPaneOpen}"
+									PointerPressed="Overlay_PointerPressed" />
+						</Grid>
 					</SplitView.Content>
 				</SplitView>
 

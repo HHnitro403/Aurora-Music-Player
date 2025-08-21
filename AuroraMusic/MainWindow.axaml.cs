@@ -74,7 +74,9 @@ namespace AuroraMusic
                 {
                     _appSettings.IsPaneOpen = value;
                     OnPropertyChanged();
-                    _dbService.SaveSettingsAsync(_appSettings);
+                    // The setter will now be the single source of truth for saving this state.
+                    // Fix CS4014: Await the async call in a fire-and-forget manner.
+                    _ = _dbService.SaveSettingsAsync(_appSettings);
                 }
             }
         }
@@ -86,6 +88,8 @@ namespace AuroraMusic
 
         private async void MainWindow_Loaded(object? sender, RoutedEventArgs e)
         {
+            this.DataContext = this;
+
             _dbService = new DatabaseService();
             _playbackService = new PlaybackService();
             _playlistManager = new PlaylistManager(_dbService);
@@ -128,50 +132,50 @@ namespace AuroraMusic
                     new NavigationItem { Title = "Settings", Icon = MaterialIconKind.Cog }
                 };
                 navigationListBox.SelectedIndex = 0;
-            }
 
-            var mainSplitView = this.FindControl<SplitView>("MainSplitView");
-            if (mainSplitView != null)
-            {
-                mainSplitView.Bind(SplitView.IsPaneOpenProperty, new Avalonia.Data.Binding("IsPaneOpen"));
-            }
-
-            var songProgressBar = this.FindControl<Slider>("SongProgressBar");
-            if (songProgressBar != null)
-            {
-                songProgressBar.AddHandler(PointerPressedEvent, (s, e) => _isDraggingSlider = true, RoutingStrategies.Tunnel, true);
-                songProgressBar.AddHandler(PointerReleasedEvent, (s, e) =>
+                var songProgressBar = this.FindControl<Slider>("SongProgressBar");
+                if (songProgressBar != null)
                 {
-                    if (s is Slider slider)
+                    songProgressBar.AddHandler(PointerPressedEvent, (s, e) => _isDraggingSlider = true, RoutingStrategies.Tunnel, true);
+                    songProgressBar.AddHandler(PointerReleasedEvent, (s, e) =>
                     {
-                        _playbackService.Time = (long)slider.Value;
-                    }
-                    _isDraggingSlider = false;
-                }, RoutingStrategies.Tunnel, true);
-            }
+                        if (s is Slider slider)
+                        {
+                            _playbackService.Time = (long)slider.Value;
+                        }
+                        _isDraggingSlider = false;
+                    }, RoutingStrategies.Tunnel, true);
+                }
 
-            await InitializeApplicationAsync();
+                await InitializeApplicationAsync();
+            }
         }
 
         private void UpdatePaneState(bool isFixed)
         {
             var mainSplitView = this.FindControl<SplitView>("MainSplitView");
             var hamburgerButton = this.FindControl<Button>("HamburgerButton");
-            if (mainSplitView == null || hamburgerButton == null) return;
+            if (mainSplitView == null || hamburgerButton == null || _appSettings == null) return;
 
             _appSettings.IsPaneFixed = isFixed;
 
             if (isFixed)
             {
                 mainSplitView.DisplayMode = SplitViewDisplayMode.CompactInline;
-                IsPaneOpen = true; // This will use the property setter to open the pane and save the state.
+                hamburgerButton.IsVisible = false;
+                // When the user actively fixes the pane, force it open.
+                IsPaneOpen = true; // The setter will handle saving the state.
             }
             else
             {
                 mainSplitView.DisplayMode = SplitViewDisplayMode.Overlay;
-                // The pane's open/closed state is already preserved in IsPaneOpen, so no action is needed.
+                hamburgerButton.IsVisible = true;
+                // When un-fixing, we don't change the IsPaneOpen state.
+                // If it was open, it remains an open overlay. If closed, it remains closed.
             }
-            hamburgerButton.IsVisible = !isFixed;
+
+            // Save the change to the IsPaneFixed setting.
+            _ = _dbService.SaveSettingsAsync(_appSettings); // Fire-and-forget, suppress CS4014
         }
 
         private void HamburgerButton_Click(object? sender, RoutedEventArgs e)
@@ -238,8 +242,29 @@ namespace AuroraMusic
                 }
 
                 // Apply pane settings
-                UpdatePaneState(_appSettings.IsPaneFixed);
-                OnPropertyChanged(nameof(IsPaneOpen)); // Notify the UI of the initial state
+                var mainSplitView = this.FindControl<SplitView>("MainSplitView");
+                var hamburgerButton = this.FindControl<Button>("HamburgerButton");
+                if (mainSplitView == null || hamburgerButton == null) return;
+
+                // Apply the visual mode based on the saved setting
+                if (_appSettings.IsPaneFixed)
+                {
+                    mainSplitView.DisplayMode = SplitViewDisplayMode.CompactInline;
+                    hamburgerButton.IsVisible = false;
+                    // A fixed pane should ALWAYS start open.
+                    _appSettings.IsPaneOpen = true;
+                }
+                else
+                {
+                    mainSplitView.DisplayMode = SplitViewDisplayMode.Overlay;
+                    hamburgerButton.IsVisible = true;
+                    // For a clean user experience, an overlay pane should ALWAYS start closed.
+                    _appSettings.IsPaneOpen = false;
+                }
+
+                // After deciding the initial state, notify the UI to update itself.
+                // This reads the value we just set in _appSettings.
+                OnPropertyChanged(nameof(IsPaneOpen));
             }
         }
 
@@ -485,6 +510,11 @@ namespace AuroraMusic
                     _uiService.ShowView(_settingsView);
                     break;
             }
+
+            if (_appSettings != null && !_appSettings.IsPaneFixed)
+            {
+                IsPaneOpen = false;
+            }
         }
 
         private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
@@ -503,6 +533,11 @@ namespace AuroraMusic
                     PreviousButton_Click(this, new RoutedEventArgs());
                     break;
             }
+        }
+
+        private void Overlay_PointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+        {
+            IsPaneOpen = false;
         }
     }
 }
